@@ -55,7 +55,7 @@ export default function AdminCBTPage() {
           <div>
             <h1 className="text-2xl font-bold text-white">CBT 텍스트 원문 원클릭 주입기</h1>
             <p className="text-sm text-slate-400 mt-1">
-              JSON 가공 필요 없음: 기출문제 텍스트 전체(지문, 보기, 정답표, 해설)를 아래에 그대로 붙여넣으세요.
+              JSON 변환 필요 없음: 기출문제 텍스트 전체(지문, 보기, 정답표, 해설)를 아래에 그대로 붙여넣으세요.
             </p>
           </div>
           <Link href="/cbt" className="text-xs text-blue-400 hover:underline">

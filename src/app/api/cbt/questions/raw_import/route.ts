@@ -22,7 +22,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: '데이터와 회차 정보가 누락되었습니다.' }, { status: 400 });
     }
 
-    // 1. 정답 파싱 (01 ② 형식)
     const ansMap: Record<number, number> = {};
     const ansMatches = [...rawText.matchAll(/(\d{1,3})\s+([①②③④])/g)];
     const numChar: Record<string, number> = { '①': 1, '②': 2, '③': 3, '④': 4 };
@@ -31,7 +30,6 @@ export async function POST(request: NextRequest) {
       if (qn >= 1 && qn <= 100) ansMap[qn] = numChar[m[2]];
     });
 
-    // 2. 해설 파싱 (01 ②\n해설...)
     const expMap: Record<number, string> = {};
     const expBlocks = rawText.split(/\n(?=\d{2,3}\s+[①②③④])/);
     expBlocks.forEach((b: string) => {
@@ -42,7 +40,6 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // 3. 지문 및 4지선다 파싱
     const parsedQuestions = [];
     for (let i = 1; i <= 100; i++) {
       const cur = String(i).padStart(2, '0');
@@ -71,7 +68,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: '텍스트에서 문제를 추출하지 못했습니다. 형식을 확인하세요.' }, { status: 400 });
     }
 
-    // 4. Supabase DB 일괄 Upsert
     const { error } = await supabase
       .from('cbt_questions')
       .upsert(parsedQuestions, { onConflict: 'session,number' });
