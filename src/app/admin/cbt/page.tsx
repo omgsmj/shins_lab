@@ -20,7 +20,7 @@ export default function AdminCBTPage() {
   const [loading, setLoading] = useState(false);
 
   const handleClientSideImport = async () => {
-    // 1. 관리자 비밀번호 검증 (클라이언트 단 1218 확인)
+    // 1. 관리자 비밀번호 검증
     if (password !== '1218') {
       alert('관리자 비밀번호가 일치하지 않습니다. (기본: 1218)');
       return;
@@ -31,7 +31,7 @@ export default function AdminCBTPage() {
     }
 
     setLoading(true);
-    setStatus('텍스트 분석 및 정규화 진행 중...');
+    setStatus('텍스트 구조 분석 및 정규화 진행 중...');
 
     try {
       // 2. 정답 매핑 추출 (01 ②, 1 ② 등)
@@ -86,19 +86,29 @@ export default function AdminCBTPage() {
         throw new Error('텍스트에서 문제를 추출하지 못했습니다. 문제 번호(01, 02...)와 보기(①, ②...)를 확인하세요.');
       }
 
-      setStatus(`총 ${parsedQuestions.length}개 문제 파싱 완료. Supabase DB로 직접 전송 중...`);
+      setStatus(`총 ${parsedQuestions.length}개 문제 파싱 완료. 기존 ${session}회차 정리 후 DB 주입 중...`);
 
-      // 5. 서버 API 없이 Supabase 클라이언트로 25개씩 청크 분할 주입 (네트워크 부하 방지)
+      // 5. 유니크 제약조건 의존성 배제: 기존 회차 삭제 후 일괄 삽입
+      const { error: delError } = await supabase
+        .from('cbt_questions')
+        .delete()
+        .eq('session', Number(session));
+
+      if (delError) {
+        throw new Error(`기존 회차 데이터 정리 실패: ${delError.message}`);
+      }
+
+      // 6. 25개씩 청크 분할 삽입
       for (let i = 0; i < parsedQuestions.length; i += 25) {
         const chunk = parsedQuestions.slice(i, i + 25);
-        const { error } = await supabase
+        const { error: insError } = await supabase
           .from('cbt_questions')
-          .upsert(chunk, { onConflict: 'session,number' });
+          .insert(chunk);
 
-        if (error) {
-          throw new Error(`DB 주입 실패: ${error.message}`);
+        if (insError) {
+          throw new Error(`DB 주입 실패: ${insError.message}`);
         }
-        setStatus(`진행 중: ${Math.min(i + 25, parsedQuestions.length)} / ${parsedQuestions.length} 문항 주입 완료...`);
+        setStatus(`진행 중: ${Math.min(i + 25, parsedQuestions.length)} / ${parsedQuestions.length} 문항 등록 완료...`);
       }
 
       setStatus(` 주입 완료! ${session}회차 총 ${parsedQuestions.length}개 문제가 DB에 등록되었습니다.`);
@@ -117,7 +127,7 @@ export default function AdminCBTPage() {
           <div>
             <h1 className="text-2xl font-bold text-white">CBT 텍스트 원문 다이렉트 주입기</h1>
             <p className="text-sm text-slate-400 mt-1">
-              API 서버를 거치지 않고 브라우저에서 Supabase로 직접 일괄 주입합니다.
+              JSON 편집 없이 원문 텍스트 전체(지문, 보기, 정답표, 해설)를 그대로 붙여넣어 주입합니다.
             </p>
           </div>
           <Link href="/cbt" className="text-xs text-blue-400 hover:underline">
