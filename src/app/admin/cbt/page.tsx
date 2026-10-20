@@ -4,55 +4,33 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 
 export default function AdminCBTPage() {
-  const [jsonText, setJsonText] = useState('');
+  const [rawText, setRawText] = useState('');
+  const [session, setSession] = useState(1);
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const sampleFormat = [
-    {
-      session: 1,
-      number: 2,
-      subject: "소프트웨어설계",
-      question: "소프트웨어 아키텍처 모델 중 MVC 구조에 대한 설명으로 옳은 것은?",
-      options: [
-        "Model은 사용자 인터페이스를 전담한다.",
-        "View는 비즈니스 로직과 데이터 처리를 담당한다.",
-        "Controller는 사용자의 입력을 받아 모델과 뷰를 제어한다.",
-        "모든 요소는 반드시 단일 클래스 내에 응집되어야 한다."
-      ],
-      answer: 3,
-      explanation: "MVC 패턴에서 Controller는 Model과 View 사이의 상호작용을 관리합니다."
-    }
-  ];
-
-  const handleImport = async () => {
+  const handleRawImport = async () => {
     if (!password) {
       alert('관리자 비밀번호를 입력하세요.');
       return;
     }
-
-    let parsedQuestions;
-    try {
-      parsedQuestions = JSON.parse(jsonText);
-      if (!Array.isArray(parsedQuestions)) {
-        throw new Error('데이터는 배열 [ ... ] 형태여야 합니다.');
-      }
-    } catch (e) {
-      alert('올바른 JSON 형식이 아닙니다. 문법을 확인하세요.');
+    if (!rawText.trim()) {
+      alert('기출문제 텍스트를 붙여넣어 주세요.');
       return;
     }
 
     setLoading(true);
-    setStatus('DB에 주입 중...');
+    setStatus('텍스트 분석 및 DB 주입 중...');
 
     try {
-      const res = await fetch('/api/cbt/questions/batch', {
+      const res = await fetch('/api/cbt/questions/raw-import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          adminPassword: password,
-          questions: parsedQuestions
+          rawText,
+          session,
+          adminPassword: password
         })
       });
 
@@ -61,10 +39,10 @@ export default function AdminCBTPage() {
         throw new Error(resJson.error);
       }
 
-      setStatus(` 주입 완료: 총 ${resJson.count}개 문제가 등록되었습니다.`);
-      setJsonText('');
+      setStatus(` 주입 성공: ${resJson.message}`);
+      setRawText('');
     } catch (err: unknown) {
-      setStatus(`❌ 오류 발생: ${err instanceof Error ? err.message : '통신 실패'}`);
+      setStatus(`❌ 실패: ${err instanceof Error ? err.message : '오류 발생'}`);
     } finally {
       setLoading(false);
     }
@@ -75,43 +53,65 @@ export default function AdminCBTPage() {
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">CBT 기출문제 대량 주입기</h1>
-            <p className="text-sm text-slate-400">JSON 포맷 데이터를 붙여넣어 수십~수백 문제를 한 번에 등록합니다.</p>
+            <h1 className="text-2xl font-bold text-white">CBT 텍스트 원문 원클릭 주입기</h1>
+            <p className="text-sm text-slate-400 mt-1">
+              JSON 가공 필요 없음: 기출문제 텍스트 전체(지문, 보기, 정답표, 해설)를 아래에 그대로 붙여넣으세요.
+            </p>
           </div>
           <Link href="/cbt" className="text-xs text-blue-400 hover:underline">
             ← CBT 시험장으로 이동
           </Link>
         </div>
 
-        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 space-y-4">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 space-y-4">
+          <div className="flex items-center gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">회차 지정</label>
+              <select
+                value={session}
+                onChange={(e) => setSession(Number(e.target.value))}
+                className="rounded border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-white"
+              >
+                <option value={1}>2024년 1회차</option>
+                <option value={2}>2024년 2회차</option>
+                <option value={3}>2024년 3회차</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-1">관리자 비밀번호</label>
+              <input
+                type="password"
+                placeholder="비밀번호 (기본: 1218)"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="rounded border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-white"
+              />
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-semibold text-slate-400 mb-2">
-              주입할 문제 JSON 배열 (예시 템플릿 참고)
+              기출문제 텍스트 원문 붙여넣기
             </label>
             <textarea
-              rows={12}
-              value={jsonText}
-              onChange={(e) => setJsonText(e.target.value)}
-              placeholder={JSON.stringify(sampleFormat, null, 2)}
-              className="w-full font-mono text-xs rounded-lg border border-slate-700 bg-slate-950 p-4 text-emerald-400 focus:outline-none focus:border-blue-500"
+              rows={16}
+              value={rawText}
+              onChange={(e) => setRawText(e.target.value)}
+              placeholder="01 사용자 요구사항...\n① 스크럼 마스터\n② 페르소나...\n\n(텍스트 전체를 복사해서 그대로 붙여넣으시면 됩니다)"
+              className="w-full font-mono text-xs rounded-lg border border-slate-700 bg-slate-950 p-4 text-slate-200 focus:outline-none focus:border-blue-500"
             />
           </div>
 
-          <div className="flex items-center justify-between gap-4 pt-2">
-            <input
-              type="password"
-              placeholder="관리자 비밀번호 (기본: 1218)"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-64 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-            />
-
+          <div className="flex items-center justify-between pt-2">
+            <span className="text-xs text-slate-500">
+              입력 글자 수: {rawText.length.toLocaleString()}자
+            </span>
             <button
-              onClick={handleImport}
-              disabled={loading || !jsonText.trim()}
-              className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-40 transition"
+              onClick={handleRawImport}
+              disabled={loading || !rawText.trim()}
+              className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-blue-500 disabled:opacity-40 transition"
             >
-              {loading ? '처리 중...' : 'DB에 대량 주입 실행'}
+              {loading ? '파싱 및 DB 주입 중...' : '원문 텍스트 분석 및 주입 실행'}
             </button>
           </div>
 
