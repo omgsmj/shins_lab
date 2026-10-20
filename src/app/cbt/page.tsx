@@ -2,22 +2,39 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Question, ExamResult } from '@/types/cbt';
+
+interface QuestionItem {
+  id: number;
+  session: number;
+  number: number;
+  subject: string;
+  question: string;
+  options: string[];
+  answer: number;
+  explanation?: string;
+}
+
+interface ExamScoreResult {
+  score: number;
+  isPassed: boolean;
+  totalQuestions: number;
+  correctCount: number;
+  wrongCount: number;
+  subjectScores: Record<string, { total: number; correct: number }>;
+}
 
 export default function CBTPage() {
-  // 모드 및 필터 상태
   const [selectedSession, setSelectedSession] = useState<number>(1);
   const [selectedSubject, setSelectedSubject] = useState<string>('전체');
   
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questions, setQuestions] = useState<QuestionItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [timeLeft, setTimeLeft] = useState<number>(150 * 60);
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
-  const [result, setResult] = useState<ExamResult | null>(null);
+  const [result, setResult] = useState<ExamScoreResult | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // 과목 선택 목록
   const subjects = [
     '전체',
     '소프트웨어 설계',
@@ -27,7 +44,6 @@ export default function CBTPage() {
     '정보시스템 구축 관리'
   ];
 
-  // 문제 데이터 조회 (띄어쓰기 및 번호 기반 자동 보정)
   const fetchQuestions = async () => {
     setLoading(true);
     try {
@@ -35,12 +51,11 @@ export default function CBTPage() {
       const json = await res.json();
 
       if (json.success && Array.isArray(json.data)) {
-        let list: Question[] = json.data;
+        let list: QuestionItem[] = json.data;
 
-        // 선택된 과목 필터링 (공백 제거 후 비교하여 불일치 방지)
         if (selectedSubject !== '전체') {
           const target = selectedSubject.replace(/\s+/g, '');
-          list = list.filter((q: Question) => {
+          list = list.filter((q) => {
             const subj = (q.subject || '').replace(/\s+/g, '');
             return subj === target;
           });
@@ -66,7 +81,6 @@ export default function CBTPage() {
     fetchQuestions();
   }, [selectedSession, selectedSubject]);
 
-  // 타이머
   useEffect(() => {
     if (isSubmitted || loading || questions.length === 0) return;
     const timer = setInterval(() => {
@@ -82,7 +96,6 @@ export default function CBTPage() {
     return () => clearInterval(timer);
   }, [isSubmitted, loading, questions]);
 
-  // OMR 답안 마킹
   const handleSelectAnswer = (qNumber: number, optNum: number) => {
     if (isSubmitted) return;
     setAnswers((prev) => ({
@@ -91,7 +104,6 @@ export default function CBTPage() {
     }));
   };
 
-  // 최종 제출 및 오답 자동 보관
   const handleSubmit = async () => {
     if (isSubmitted || questions.length === 0) return;
 
@@ -130,7 +142,6 @@ export default function CBTPage() {
     });
     setIsSubmitted(true);
 
-    // 오답노트 DB 저장 호출
     try {
       const now = new Date();
       const folderName = `${now.getMonth() + 1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')} (${selectedSession}회차 ${selectedSubject})`;
@@ -148,7 +159,7 @@ export default function CBTPage() {
         })
       });
     } catch (saveErr) {
-      console.error('오답노트 자동 저장 실패:', saveErr);
+      console.error('오답노트 저장 실패:', saveErr);
     }
   };
 
@@ -163,7 +174,6 @@ export default function CBTPage() {
 
   return (
     <div className="flex h-screen flex-col bg-slate-950 text-slate-100 font-sans">
-      {/* 글로벌 상단 헤더 */}
       <header className="flex items-center justify-between border-b border-slate-800 bg-slate-900 px-6 py-3">
         <div className="flex items-center gap-3">
           <Link
@@ -179,7 +189,6 @@ export default function CBTPage() {
             📁 오답노트 보관함
           </Link>
 
-          {/* 회차 선택 */}
           <select
             value={selectedSession}
             onChange={(e) => setSelectedSession(Number(e.target.value))}
@@ -190,7 +199,6 @@ export default function CBTPage() {
             <option value={3}>2024년 3회차</option>
           </select>
 
-          {/* 과목 필터 */}
           <select
             value={selectedSubject}
             onChange={(e) => setSelectedSubject(e.target.value)}
@@ -223,7 +231,6 @@ export default function CBTPage() {
         </div>
       </header>
 
-      {/* 본문 레이아웃 */}
       {loading ? (
         <div className="flex flex-1 items-center justify-center font-mono text-sm text-slate-400">
           기출문제를 불러오는 중...
@@ -232,12 +239,11 @@ export default function CBTPage() {
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-slate-400">
           <p className="text-base text-slate-300">선택한 회차({selectedSession}회차) 또는 과목에 등록된 문제가 없습니다.</p>
           <div className="text-xs text-slate-500 max-w-md text-center leading-relaxed">
-            `node scripts/import.js` 스크립트를 실행하여 기출문제를 주입하거나, 상단 회차를 1회차 / 과목을 '전체'로 변경해 보십시오.
+            관리자 페이지(/admin/cbt)에서 기출문제를 주입하거나 상단 필터를 변경하십시오.
           </div>
         </div>
       ) : (
         <div className="flex flex-1 overflow-hidden">
-          {/* 좌측 문제 지문 영역 */}
           <main className="flex-1 overflow-y-auto p-8">
             <div className="mx-auto max-w-3xl">
               <div className="mb-4 flex items-center justify-between border-b border-slate-800 pb-2">
@@ -253,7 +259,6 @@ export default function CBTPage() {
                 {currentQ.question}
               </p>
 
-              {/* 4지선다 보기 */}
               <div className="space-y-2.5">
                 {(currentQ.options || []).map((opt, idx) => {
                   const optNum = idx + 1;
@@ -283,7 +288,6 @@ export default function CBTPage() {
                 })}
               </div>
 
-              {/* 채점 완료 후 해설 뷰어 */}
               {isSubmitted && (
                 <div className="mt-6 rounded-lg border border-slate-800 bg-slate-900 p-4">
                   <div className="mb-1 font-bold text-emerald-400 text-sm">
@@ -296,7 +300,6 @@ export default function CBTPage() {
                 </div>
               )}
 
-              {/* 이전/다음 이동 버튼 */}
               <div className="mt-8 flex justify-between">
                 <button
                   onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
@@ -316,7 +319,6 @@ export default function CBTPage() {
             </div>
           </main>
 
-          {/* 우측 OMR 시트 */}
           <aside className="w-72 border-l border-slate-800 bg-slate-900/40 p-4 overflow-y-auto">
             {result && (
               <div className="mb-4 rounded-lg border border-slate-800 bg-slate-900 p-3 text-center">
@@ -358,3 +360,7 @@ export default function CBTPage() {
             </div>
           </aside>
         </div>
+      )}
+    </div>
+  );
+}
