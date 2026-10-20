@@ -30,7 +30,10 @@ export default function CBTPage() {
   const [questions, setQuestions] = useState<QuestionItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
+  
+  // 실제 시험 규정: 전체(100문항) = 150분(9,000초), 개별 과목(20문항) = 30분(1,800초)
   const [timeLeft, setTimeLeft] = useState<number>(150 * 60);
+  const [initialTime, setInitialTime] = useState<number>(150 * 60);
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
   const [result, setResult] = useState<ExamScoreResult | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -66,6 +69,11 @@ export default function CBTPage() {
         setAnswers({});
         setIsSubmitted(false);
         setResult(null);
+
+        // 과목 선택에 따른 실전 제한 시간 동적 세팅
+        const examTime = selectedSubject === '전체' ? 150 * 60 : 30 * 60;
+        setTimeLeft(examTime);
+        setInitialTime(examTime);
       } else {
         setQuestions([]);
       }
@@ -81,18 +89,22 @@ export default function CBTPage() {
     fetchQuestions();
   }, [selectedSession, selectedSubject]);
 
+  // 실시간 타이머 및 시간 초과 시 강제 자동 제출
   useEffect(() => {
     if (isSubmitted || loading || questions.length === 0) return;
+
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
+          alert('⏰ 시험 시간이 종료되었습니다! 답안이 자동으로 제출되고 채점됩니다.');
           handleSubmit();
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
+
     return () => clearInterval(timer);
   }, [isSubmitted, loading, questions]);
 
@@ -130,7 +142,15 @@ export default function CBTPage() {
     });
 
     const score = Math.round((correctCount / questions.length) * 100);
-    const isPassed = score >= 60;
+    // 과락 규정: 전체 응시일 경우 과목당 40점 미만(과목별 8개 미만) 시 불합격
+    let hasUnder40 = false;
+    if (selectedSubject === '전체') {
+      Object.values(subjectStats).forEach((stat) => {
+        const subScore = Math.round((stat.correct / stat.total) * 100);
+        if (subScore < 40) hasUnder40 = true;
+      });
+    }
+    const isPassed = selectedSubject === '전체' ? score >= 60 && !hasUnder40 : score >= 60;
 
     setResult({
       score,
@@ -154,12 +174,24 @@ export default function CBTPage() {
           session: selectedSession,
           score,
           isPassed,
-          timeSpent: 150 * 60 - timeLeft,
+          timeSpent: initialTime - timeLeft,
           wrongAnswers: wrongList
         })
       });
     } catch (saveErr) {
       console.error('오답노트 저장 실패:', saveErr);
+    }
+  };
+
+  const handleSessionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    if (val === 'custom') {
+      const customVal = prompt('조회할 회차 번호(숫자)를 입력하세요:', '4');
+      if (customVal && !isNaN(Number(customVal))) {
+        setSelectedSession(Number(customVal));
+      }
+    } else {
+      setSelectedSession(Number(val));
     }
   };
 
@@ -189,15 +221,20 @@ export default function CBTPage() {
             📁 오답노트 보관함
           </Link>
 
-          <select
-            value={selectedSession}
-            onChange={(e) => setSelectedSession(Number(e.target.value))}
-            className="rounded border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
-          >
-            <option value={1}>2024년 1회차</option>
-            <option value={2}>2024년 2회차</option>
-            <option value={3}>2024년 3회차</option>
-          </select>
+          {/* 회차 선택 및 직접 추가 입력 */}
+          <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded border border-slate-700">
+            <span className="text-xs text-slate-400">회차:</span>
+            <select
+              value={[1, 2, 3].includes(selectedSession) ? selectedSession : 'custom'}
+              onChange={handleSessionChange}
+              className="bg-transparent text-xs text-white focus:outline-none"
+            >
+              <option value={1} className="bg-slate-900">2024년 1회차</option>
+              <option value={2} className="bg-slate-900">2024년 2회차</option>
+              <option value={3} className="bg-slate-900">2024년 3회차</option>
+              <option value="custom" className="bg-slate-900">✏️ 직접 입력 ({selectedSession}회차)</option>
+            </select>
+          </div>
 
           <select
             value={selectedSubject}
@@ -213,8 +250,14 @@ export default function CBTPage() {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="font-mono text-sm font-bold text-emerald-400">
-            남은 시간: {formatTime(timeLeft)}
+          <div className="flex items-center gap-2 font-mono text-xs">
+            <span className="text-slate-400">제한시간:</span>
+            <span className={`font-bold text-sm ${timeLeft <= 300 ? 'text-rose-400 animate-pulse' : 'text-emerald-400'}`}>
+              {formatTime(timeLeft)}
+            </span>
+            <span className="text-[10px] text-slate-500">
+              ({selectedSubject === '전체' ? '총 150분' : '과목별 30분'})
+            </span>
           </div>
           {!isSubmitted && questions.length > 0 && (
             <button
@@ -237,9 +280,9 @@ export default function CBTPage() {
         </div>
       ) : questions.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-slate-400">
-          <p className="text-base text-slate-300">선택한 회차({selectedSession}회차) 또는 과목에 등록된 문제가 없습니다.</p>
+          <p className="text-base text-slate-300">선택한 {selectedSession}회차 또는 과목에 등록된 문제가 없습니다.</p>
           <div className="text-xs text-slate-500 max-w-md text-center leading-relaxed">
-            관리자 페이지(/admin/cbt)에서 기출문제를 주입하거나 상단 필터를 변경하십시오.
+            SQL Editor에서 문제를 주입했는지 확인하십시오.
           </div>
         </div>
       ) : (
@@ -332,7 +375,7 @@ export default function CBTPage() {
             )}
 
             <div className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">
-              OMR 마킹 현황
+              OMR 마킹 현황 ({questions.length}문항)
             </div>
 
             <div className="grid grid-cols-5 gap-1.5">
