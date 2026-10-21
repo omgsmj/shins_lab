@@ -29,7 +29,7 @@ export default function CBTPage() {
 
   const [selectedSession, setSelectedSession] = useState<string>('1');
   const [selectedSubject, setSelectedSubject] = useState<string>('전체');
-  
+
   const [questions, setQuestions] = useState<QuestionItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -236,16 +236,15 @@ export default function CBTPage() {
 
       const resJson = await res.json();
       if (!resJson.success) {
-        throw new Error(resJson.error || '오답 저장 실패');
+        throw new Error(resJson.error || '서버 응답 실패');
       }
 
-      // 오답노트 즉시 이동 여부 질의
       if (confirm(`🎉 시험 제출 및 채점이 완료되었습니다!\n점수: ${score}점 (${isPassed ? '합격' : '불합격'})\n오답 수: ${wrongList.length}개\n\n지금 바로 오답노트 보관함으로 이동하시겠습니까?`)) {
         router.push('/cbt/notes');
       }
-    } catch (saveErr) {
+    } catch (saveErr: any) {
       console.error('오답노트 저장 실패:', saveErr);
-      alert('오답 데이터 저장 중 문제가 발생했습니다. 관리자 설정을 확인하세요.');
+      alert(`❌ 오답노트 저장 실패 원인:\n${saveErr?.message || saveErr}`);
     } finally {
       setSubmitting(false);
     }
