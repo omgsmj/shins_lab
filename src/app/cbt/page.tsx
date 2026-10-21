@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 
 interface QuestionItem {
   id: number;
@@ -56,50 +57,51 @@ export default function CBTPage() {
     setLoading(true);
     try {
       if (selectedSession === 'random') {
-        const res = await fetch('/api/cbt/questions');
-        const json = await res.json();
-        if (json.success && Array.isArray(json.data)) {
-          const allPool: QuestionItem[] = json.data;
-          const grouped: Record<string, QuestionItem[]> = {};
+        const { data, error } = await supabase
+          .from('cbt_questions')
+          .select('*');
 
-          subjects.filter((s) => s !== '전체').forEach((s) => {
-            grouped[s] = allPool.filter((q) => (q.subject || '').replace(/\s+/g, '') === s.replace(/\s+/g, ''));
+        if (error) throw error;
+
+        const allPool: QuestionItem[] = data || [];
+        const grouped: Record<string, QuestionItem[]> = {};
+
+        subjects.filter((s) => s !== '전체').forEach((s) => {
+          grouped[s] = allPool.filter((q) => (q.subject || '').replace(/\s+/g, '') === s.replace(/\s+/g, ''));
+        });
+
+        let sampled: QuestionItem[] = [];
+        if (selectedSubject === '전체') {
+          Object.values(grouped).forEach((list) => {
+            const shuffled = [...list].sort(() => 0.5 - Math.random());
+            sampled = sampled.concat(shuffled.slice(0, 20));
           });
-
-          let sampled: QuestionItem[] = [];
-          if (selectedSubject === '전체') {
-            Object.values(grouped).forEach((list) => {
-              const shuffled = [...list].sort(() => 0.5 - Math.random());
-              sampled = sampled.concat(shuffled.slice(0, 20));
-            });
-          } else {
-            const targetList = grouped[selectedSubject] || [];
-            sampled = [...targetList].sort(() => 0.5 - Math.random()).slice(0, 20);
-          }
-
-          const formatted = sampled.map((item, idx) => ({
-            ...item,
-            number: idx + 1
-          }));
-
-          setQuestions(formatted);
         } else {
-          setQuestions([]);
+          const targetList = grouped[selectedSubject] || [];
+          sampled = [...targetList].sort(() => 0.5 - Math.random()).slice(0, 20);
         }
+
+        const formatted = sampled.map((item, idx) => ({
+          ...item,
+          number: idx + 1
+        }));
+
+        setQuestions(formatted);
       } else {
-        const res = await fetch(`/api/cbt/questions?session=${selectedSession}`);
-        const json = await res.json();
+        const { data, error } = await supabase
+          .from('cbt_questions')
+          .select('*')
+          .eq('session', Number(selectedSession))
+          .order('number', { ascending: true });
 
-        if (json.success && Array.isArray(json.data)) {
-          let list: QuestionItem[] = json.data;
-          if (selectedSubject !== '전체') {
-            const target = selectedSubject.replace(/\s+/g, '');
-            list = list.filter((q) => (q.subject || '').replace(/\s+/g, '') === target);
-          }
-          setQuestions(list);
-        } else {
-          setQuestions([]);
+        if (error) throw error;
+
+        let list: QuestionItem[] = data || [];
+        if (selectedSubject !== '전체') {
+          const target = selectedSubject.replace(/\s+/g, '');
+          list = list.filter((q) => (q.subject || '').replace(/\s+/g, '') === target);
         }
+        setQuestions(list);
       }
 
       setCurrentIndex(0);
@@ -111,7 +113,7 @@ export default function CBTPage() {
       const examTime = selectedSubject === '전체' ? 150 * 60 : 30 * 60;
       setTimeLeft(examTime);
       setInitialTime(examTime);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('문제 로드 에러:', err);
       setQuestions([]);
     } finally {
@@ -221,30 +223,46 @@ export default function CBTPage() {
       const sessionLabel = selectedSession === 'random' ? '랜덤 모의고사' : `${selectedSession}회차`;
       const folderName = `${now.getMonth() + 1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')} (${sessionLabel} ${selectedSubject})`;
 
-      const res = await fetch('/api/cbt/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          folderName,
+      // 1. Supabase에 시험 이력 직접 삽입 (API 우회)
+      const { data: historyData, error: historyError } = await supabase
+        .from('cbt_exam_histories')
+        .insert({
+          folder_name: folderName,
           session: selectedSession === 'random' ? 999 : Number(selectedSession),
-          score,
-          isPassed,
-          timeSpent: initialTime - timeLeft,
-          wrongAnswers: wrongList
+          score: score,
+          is_passed: isPassed,
+          time_spent: initialTime - timeLeft
         })
-      });
+        .select('id')
+        .single();
 
-      const resJson = await res.json();
-      if (!resJson.success) {
-        throw new Error(resJson.error || '서버 응답 실패');
+      if (historyError || !historyData) {
+        throw new Error(`이력 저장 실패: ${historyError?.message || 'DB 에러'}`);
+      }
+
+      // 2. 오답 문항 직접 삽입
+      if (wrongList.length > 0) {
+        const wrongRecords = wrongList.map((item) => ({
+          history_id: historyData.id,
+          question_id: item.questionId,
+          user_answer: item.userAnswer
+        }));
+
+        const { error: wrongError } = await supabase
+          .from('cbt_wrong_answers')
+          .insert(wrongRecords);
+
+        if (wrongError) {
+          throw new Error(`오답 상세 저장 실패: ${wrongError.message}`);
+        }
       }
 
       if (confirm(`🎉 시험 제출 및 채점이 완료되었습니다!\n점수: ${score}점 (${isPassed ? '합격' : '불합격'})\n오답 수: ${wrongList.length}개\n\n지금 바로 오답노트 보관함으로 이동하시겠습니까?`)) {
         router.push('/cbt/notes');
       }
-    } catch (saveErr: any) {
-      console.error('오답노트 저장 실패:', saveErr);
-      alert(`❌ 오답노트 저장 실패 원인:\n${saveErr?.message || saveErr}`);
+    } catch (saveErr: unknown) {
+      console.error('오답노트 직접 저장 실패:', saveErr);
+      alert(`❌ 오답 저장 실패 상세 원인:\n${saveErr instanceof Error ? saveErr.message : String(saveErr)}`);
     } finally {
       setSubmitting(false);
     }
