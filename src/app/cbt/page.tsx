@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface QuestionItem {
   id: number;
@@ -24,6 +25,8 @@ interface ExamScoreResult {
 }
 
 export default function CBTPage() {
+  const router = useRouter();
+
   const [selectedSession, setSelectedSession] = useState<string>('1');
   const [selectedSubject, setSelectedSubject] = useState<string>('전체');
   
@@ -38,6 +41,7 @@ export default function CBTPage() {
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
   const [result, setResult] = useState<ExamScoreResult | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [submitting, setSubmitting] = useState<boolean>(false);
 
   const subjects = [
     '전체',
@@ -52,7 +56,6 @@ export default function CBTPage() {
     setLoading(true);
     try {
       if (selectedSession === 'random') {
-        // P3: 3개 회차(1, 2, 3회차) 데이터를 모두 조회하여 과목별 20문항씩 무작위 추출
         const res = await fetch('/api/cbt/questions');
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {
@@ -74,7 +77,6 @@ export default function CBTPage() {
             sampled = [...targetList].sort(() => 0.5 - Math.random()).slice(0, 20);
           }
 
-          // 문제 번호 1부터 재정렬
           const formatted = sampled.map((item, idx) => ({
             ...item,
             number: idx + 1
@@ -157,9 +159,8 @@ export default function CBTPage() {
   };
 
   const handleSubmit = async (force: boolean = false) => {
-    if (isSubmitted || questions.length === 0) return;
+    if (isSubmitted || questions.length === 0 || submitting) return;
 
-    // P0: 미응시 문항 식별 및 사용자 경고
     const unmarkedCount = questions.filter((q) => answers[q.number] === undefined).length;
     if (!force && unmarkedCount > 0) {
       const ok = confirm(`⚠️ 아직 풀지 않은 문제가 ${unmarkedCount}문항 남아 있습니다.\n그래도 최종 제출하시겠습니까?`);
@@ -168,6 +169,8 @@ export default function CBTPage() {
         return;
       }
     }
+
+    setSubmitting(true);
 
     let correctCount = 0;
     const wrongList: Array<{ questionId: number; userAnswer: number }> = [];
@@ -201,14 +204,16 @@ export default function CBTPage() {
     }
     const isPassed = selectedSubject === '전체' ? score >= 60 && !hasUnder40 : score >= 60;
 
-    setResult({
+    const calculatedResult = {
       score,
       isPassed,
       totalQuestions: questions.length,
       correctCount,
       wrongCount: questions.length - correctCount,
       subjectScores: subjectStats
-    });
+    };
+
+    setResult(calculatedResult);
     setIsSubmitted(true);
 
     try {
@@ -216,7 +221,7 @@ export default function CBTPage() {
       const sessionLabel = selectedSession === 'random' ? '랜덤 모의고사' : `${selectedSession}회차`;
       const folderName = `${now.getMonth() + 1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')} (${sessionLabel} ${selectedSubject})`;
 
-      await fetch('/api/cbt/submit', {
+      const res = await fetch('/api/cbt/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -228,8 +233,21 @@ export default function CBTPage() {
           wrongAnswers: wrongList
         })
       });
+
+      const resJson = await res.json();
+      if (!resJson.success) {
+        throw new Error(resJson.error || '오답 저장 실패');
+      }
+
+      // 오답노트 즉시 이동 여부 질의
+      if (confirm(`🎉 시험 제출 및 채점이 완료되었습니다!\n점수: ${score}점 (${isPassed ? '합격' : '불합격'})\n오답 수: ${wrongList.length}개\n\n지금 바로 오답노트 보관함으로 이동하시겠습니까?`)) {
+        router.push('/cbt/notes');
+      }
     } catch (saveErr) {
       console.error('오답노트 저장 실패:', saveErr);
+      alert('오답 데이터 저장 중 문제가 발생했습니다. 관리자 설정을 확인하세요.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -274,12 +292,12 @@ export default function CBTPage() {
           </Link>
           <Link
             href="/cbt/notes"
-            className="rounded border border-indigo-500/40 bg-indigo-600/20 px-3 py-1.5 text-xs font-bold text-indigo-300 hover:bg-indigo-600/30 transition"
+            className="rounded border border-indigo-500/40 bg-indigo-600/20 px-3 py-1.5 text-xs font-bold text-indigo-300 hover:bg-indigo-600/30 transition flex items-center gap-1.5"
           >
-            📁 오답노트 보관함
+            <span>📁 오답노트 보관함</span>
+            <span className="text-[10px] bg-indigo-500/30 px-1.5 py-0.2 rounded text-indigo-200">바로가기</span>
           </Link>
 
-          {/* 회차 선택 및 랜덤 모의고사 */}
           <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded border border-slate-700">
             <span className="text-xs text-slate-400">회차:</span>
             <select
@@ -321,9 +339,10 @@ export default function CBTPage() {
           {!isSubmitted && questions.length > 0 && (
             <button
               onClick={() => handleSubmit(false)}
-              className="rounded bg-rose-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-rose-500 transition shadow-sm"
+              disabled={submitting}
+              className="rounded bg-rose-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-rose-500 transition shadow-sm disabled:opacity-50"
             >
-              최종 제출 & 채점
+              {submitting ? '채점 중...' : '최종 제출 & 채점'}
             </button>
           )}
         </div>
@@ -341,7 +360,6 @@ export default function CBTPage() {
         <div className="flex flex-1 overflow-hidden">
           <main className="flex-1 overflow-y-auto p-8">
             <div className="mx-auto max-w-3xl">
-              {/* 문제 헤더 및 P1 헷갈림 북마크 버튼 */}
               <div className="mb-4 flex items-center justify-between border-b border-slate-800 pb-2">
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-bold text-blue-400">
@@ -397,9 +415,17 @@ export default function CBTPage() {
               </div>
 
               {isSubmitted && (
-                <div className="mt-6 rounded-lg border border-slate-800 bg-slate-900 p-4">
-                  <div className="mb-1 font-bold text-emerald-400 text-sm">
-                    정답: {currentQ.answer}번
+                <div className="mt-6 rounded-lg border border-slate-800 bg-slate-900 p-4 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <span className="font-bold text-emerald-400 text-sm">
+                      정답: {currentQ.answer}번
+                    </span>
+                    <button
+                      onClick={() => router.push('/cbt/notes')}
+                      className="rounded bg-indigo-600 px-3 py-1 text-xs font-bold text-white hover:bg-indigo-500 transition"
+                    >
+                      📁 오답노트 보관함 열기 →
+                    </button>
                   </div>
                   <div className="text-xs leading-relaxed text-slate-300">
                     <span className="font-semibold text-slate-400">해설: </span>
@@ -427,20 +453,24 @@ export default function CBTPage() {
             </div>
           </main>
 
-          {/* 우측 OMR 시트 & P0/P1 검증 패널 */}
           <aside className="w-80 border-l border-slate-800 bg-slate-900/40 p-4 overflow-y-auto flex flex-col">
             {result && (
-              <div className="mb-4 rounded-lg border border-slate-800 bg-slate-900 p-3 text-center">
+              <div className="mb-4 rounded-lg border border-slate-800 bg-slate-900 p-3 text-center space-y-2">
                 <div className={`text-xl font-bold ${result.isPassed ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {result.score}점 ({result.isPassed ? '합격' : '불합격'})
                 </div>
-                <div className="mt-1 text-xs text-slate-400">
+                <div className="text-xs text-slate-400">
                   정답 {result.correctCount} / 오답 {result.wrongCount}
                 </div>
+                <button
+                  onClick={() => router.push('/cbt/notes')}
+                  className="w-full rounded bg-indigo-600 py-1.5 text-xs font-bold text-white hover:bg-indigo-500 transition shadow"
+                >
+                  오답노트 보관함으로 이동
+                </button>
               </div>
             )}
 
-            {/* P0 / P1 실시간 통계 배지 */}
             <div className="mb-3 flex items-center justify-between text-xs">
               <span className="font-bold text-slate-400 uppercase tracking-wider">OMR 마킹 시트</span>
               <div className="flex gap-2">
@@ -453,7 +483,6 @@ export default function CBTPage() {
               </div>
             </div>
 
-            {/* OMR 필터 탭 */}
             <div className="mb-3 grid grid-cols-3 gap-1 rounded bg-slate-950 p-1 border border-slate-800 text-[11px]">
               <button
                 onClick={() => setOmrFilter('all')}
@@ -475,7 +504,6 @@ export default function CBTPage() {
               </button>
             </div>
 
-            {/* OMR 카드 그리드 */}
             <div className="grid grid-cols-5 gap-1.5 flex-1">
               {filteredQuestions.map((q) => {
                 const isMarked = answers[q.number] !== undefined;
