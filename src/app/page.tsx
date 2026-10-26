@@ -28,6 +28,12 @@ interface StudyBoardLog {
   summary: string;
 }
 
+interface DevTask {
+  id: number;
+  task: string;
+  is_completed: boolean;
+}
+
 const DEFAULT_SCHEDULES: ScheduleItem[] = [
   { id: 1, date: '2026-10-26', title: '정보처리기사 CBT 엔진 빌드', category: 'DEV', isDday: false },
   { id: 2, date: '2026-10-28', title: 'AI 파이프라인 통합 테스트', category: 'ACADEMIC', isDday: true },
@@ -107,7 +113,11 @@ export default function EngineeringHub() {
   const [logMinutes, setLogMinutes] = useState<number>(30);
   const [logSummary, setLogSummary] = useState<string>('');
 
-  // 10. 스크래치패드
+  // 10. 엔지니어링 데일리 투두 체크리스트
+  const [tasks, setTasks] = useState<DevTask[]>([]);
+  const [newTaskInput, setNewTaskInput] = useState<string>('');
+
+  // 11. 스크래치패드
   const [scratchpad, setScratchpad] = useState<string>(
     '// QUICK SCRATCHPAD (Auto-saved)\n$ python -m venv venv\n$ pip install -r requirements.txt'
   );
@@ -228,7 +238,7 @@ export default function EngineeringHub() {
     fetchJeonjuWeather();
   }, []);
 
-  // 1단계: 로컬 캐시 즉시 화면 복원 + 2단계: Supabase 원격 DB 최신 데이터 동기화
+  // Supabase 원격 DB 최신 데이터 동기화
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -268,7 +278,6 @@ export default function EngineeringHub() {
       } catch (e) {}
     }
 
-    // 원격 Supabase DB 데이터 페칭 (캐시 무효화 및 동기화)
     const syncRemoteData = async () => {
       try {
         const { data: pData } = await supabase.from('user_profiles').select('*').eq('id', 1).maybeSingle();
@@ -323,8 +332,14 @@ export default function EngineeringHub() {
           setStudyLogs(mappedLogs);
           localStorage.setItem('station_board_study_logs', JSON.stringify(mappedLogs));
         }
+
+        // 데일리 투두 로드
+        const { data: tData } = await supabase.from('dev_checklist').select('*').order('id', { ascending: true });
+        if (tData) {
+          setTasks(tData);
+        }
       } catch (err) {
-        console.warn('Supabase DB 대기 중: 로컬 스토리지 모드로 작동');
+        console.warn('Supabase DB 동기화 대기 중: 로컬 모드 유지');
       }
     };
 
@@ -520,6 +535,50 @@ export default function EngineeringHub() {
     await supabase.from('study_board_logs').delete().eq('id', id);
   };
 
+  // [기능 2] 데일리 투두 토글 & 추가 & 삭제 핸들러
+  const handleToggleTask = async (task: DevTask) => {
+    playClickSound();
+    const updatedStatus = !task.is_completed;
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, is_completed: updatedStatus } : t)));
+    await supabase.from('dev_checklist').update({ is_completed: updatedStatus }).eq('id', task.id);
+  };
+
+  const handleAddTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAuthenticated) {
+      alert('관리자 로그인이 필요합니다.');
+      return;
+    }
+    if (!newTaskInput.trim()) return;
+    playClickSound();
+
+    const tempTask: DevTask = {
+      id: Date.now(),
+      task: newTaskInput.trim(),
+      is_completed: false,
+    };
+
+    setTasks((prev) => [...prev, tempTask]);
+    setNewTaskInput('');
+
+    const { data } = await supabase
+      .from('dev_checklist')
+      .insert({ task: tempTask.task, is_completed: false })
+      .select()
+      .single();
+
+    if (data) {
+      setTasks((prev) => prev.map((t) => (t.id === tempTask.id ? { ...t, id: data.id } : t)));
+    }
+  };
+
+  const handleDeleteTask = async (id: number) => {
+    if (!isAuthenticated) return;
+    playClickSound();
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+    await supabase.from('dev_checklist').delete().eq('id', id);
+  };
+
   // D-Day 계산 유틸리티
   const calculateDday = (targetDateStr: string) => {
     if (!targetDateStr) return 'D-DAY';
@@ -611,6 +670,28 @@ export default function EngineeringHub() {
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
   const ddayItems = schedules.filter((s) => s.isDday);
+
+  // [기능 1] 최근 12주(84일) 잔디 히트맵 데이터 계산
+  const studyDateMinutesMap: Record<string, number> = {};
+  studyLogs.forEach((l) => {
+    const mins = l.durationHours * 60 + l.durationMinutes;
+    studyDateMinutesMap[l.date] = (studyDateMinutesMap[l.date] || 0) + mins;
+  });
+
+  const heatmapDays = Array.from({ length: 84 }, (_, idx) => {
+    const d = new Date(2026, 9, 26);
+    d.setDate(d.getDate() - (83 - idx));
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const key = `${yyyy}-${mm}-${dd}`;
+    const minutes = studyDateMinutesMap[key] || 0;
+    return { date: key, minutes };
+  });
+
+  // 투두 완료 진행률
+  const completedTasksCount = tasks.filter((t) => t.is_completed).length;
+  const taskProgressPct = tasks.length > 0 ? Math.round((completedTasksCount / tasks.length) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-[#090b10] text-[#c9d1d9] font-mono selection:bg-[#238636] selection:text-white p-4 md:p-8">
@@ -777,7 +858,7 @@ export default function EngineeringHub() {
             </span>
           </div>
           <div className="text-base font-bold text-white mt-1">CBT 통합 시스템</div>
-          <div className="text-xs text-[#8b949e] mt-1">시험 응시 · 오답노트 보관함 · 문제 주입기 통합</div>
+          <div className="text-xs text-[#8b949e] mt-1">시험 응시 · 오답노트 보관함 통합</div>
         </Link>
 
         <Link
@@ -811,7 +892,7 @@ export default function EngineeringHub() {
 
       {/* 메인 2열 그리드 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* [좌측 7열]: 올해/이달 목표 + 달력 + 학습 시간 통계 및 로그 게시판 */}
+        {/* [좌측 7열]: 올해/이달 목표 + 달력 + 히트맵 잔디밭 + 학습 통계 및 로그 */}
         <section className="lg:col-span-7 space-y-6">
           {/* 달력 상단: 목표 보드 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-4 shadow-lg">
@@ -1051,23 +1132,60 @@ export default function EngineeringHub() {
             </div>
           </div>
 
-          {/* 이번 달 학습 누적 통계 & 미니 바 차트 */}
-          <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-4 shadow-lg">
-            <div className="flex items-center justify-between border-b border-[#30363d] pb-2 mb-3">
+          {/* [기능 1] 공부 기록 잔디밭 (GitHub Heatmap) & 누적 통계 */}
+          <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-4 shadow-lg space-y-4">
+            <div className="flex items-center justify-between border-b border-[#30363d] pb-2">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-white uppercase tracking-wider">MONTHLY_STUDY_METRICS</span>
-                <span className="text-[10px] text-[#8b949e]">({year}년 {month + 1}월 기준)</span>
+                <span className="text-xs font-bold text-white uppercase tracking-wider">COMMIT_ACTIVITY_HEATMAP</span>
+                <span className="text-[10px] text-[#8b949e]">(최근 12주간 잔디 심기)</span>
               </div>
-              <span className="text-xs font-bold text-[#d2a8ff]">
-                총 {Math.floor(currentMonthTotalMinutes / 60)}시간 {currentMonthTotalMinutes % 60}분
+              <span className="text-xs font-bold text-[#7ee787]">
+                총 {Math.floor(currentMonthTotalMinutes / 60)}h {currentMonthTotalMinutes % 60}m (당월)
               </span>
             </div>
 
-            {currentMonthTotalMinutes === 0 ? (
-              <div className="text-[11px] text-[#8b949e] py-1 text-center">이번 달 등록된 공부 시간이 없습니다.</div>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-[#0d1117] border border-[#21262d]">
+            {/* 잔디밭 그리드 (7행 × 12열 = 84일) */}
+            <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3">
+              <div className="flex gap-1.5 justify-center overflow-x-auto py-1">
+                {Array.from({ length: 12 }).map((_, colIdx) => (
+                  <div key={colIdx} className="flex flex-col gap-1.5">
+                    {heatmapDays.slice(colIdx * 7, (colIdx + 1) * 7).map((day) => {
+                      let bgClass = 'bg-[#161b22] border-[#21262d]';
+                      if (day.minutes > 0 && day.minutes < 60) bgClass = 'bg-[#0e4429] border-[#006d32]';
+                      else if (day.minutes >= 60 && day.minutes < 180) bgClass = 'bg-[#006d32] border-[#26a641]';
+                      else if (day.minutes >= 180 && day.minutes < 300) bgClass = 'bg-[#26a641] border-[#39d353]';
+                      else if (day.minutes >= 300) bgClass = 'bg-[#39d353] border-emerald-300';
+
+                      return (
+                        <div
+                          key={day.date}
+                          title={`${day.date}: ${Math.floor(day.minutes / 60)}시간 ${day.minutes % 60}분 공부`}
+                          className={`w-3.5 h-3.5 rounded-sm border transition-all hover:scale-125 cursor-pointer ${bgClass}`}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-[#8b949e] pt-2 px-1">
+                <span>12 WEEKS AGO</span>
+                <div className="flex items-center gap-1">
+                  <span>LESS</span>
+                  <div className="w-2.5 h-2.5 rounded-sm bg-[#161b22] border border-[#21262d]" />
+                  <div className="w-2.5 h-2.5 rounded-sm bg-[#0e4429]" />
+                  <div className="w-2.5 h-2.5 rounded-sm bg-[#006d32]" />
+                  <div className="w-2.5 h-2.5 rounded-sm bg-[#26a641]" />
+                  <div className="w-2.5 h-2.5 rounded-sm bg-[#39d353]" />
+                  <span>MORE</span>
+                </div>
+                <span>TODAY</span>
+              </div>
+            </div>
+
+            {/* 과목별 미니 프로그레스 바 */}
+            {currentMonthTotalMinutes > 0 && (
+              <div className="space-y-2 pt-1">
+                <div className="flex h-2 w-full overflow-hidden rounded-full bg-[#0d1117] border border-[#21262d]">
                   {Object.entries(subjectMap).map(([subj, mins], idx) => {
                     const pct = Math.round((mins / currentMonthTotalMinutes) * 100);
                     const colors = ['bg-[#58a6ff]', 'bg-[#7ee787]', 'bg-[#d2a8ff]', 'bg-[#f0883e]', 'bg-[#f85149]'];
@@ -1082,7 +1200,7 @@ export default function EngineeringHub() {
                   })}
                 </div>
 
-                <div className="flex flex-wrap gap-3 text-[10px] text-[#8b949e] pt-1">
+                <div className="flex flex-wrap gap-3 text-[10px] text-[#8b949e]">
                   {Object.entries(subjectMap).map(([subj, mins], idx) => {
                     const colors = ['text-[#58a6ff]', 'text-[#7ee787]', 'text-[#d2a8ff]', 'text-[#f0883e]', 'text-[#f85149]'];
                     return (
@@ -1202,7 +1320,7 @@ export default function EngineeringHub() {
           </div>
         </section>
 
-        {/* [우측 5열]: 크로노 모듈 + 프로필/자소서 + 커플 텔레메트리 */}
+        {/* [우측 5열]: 크로노 모듈 + 프로필/자소서 + 투두 체크리스트 + 커플 텔레메트리 + 스크래치패드 */}
         <section className="lg:col-span-5 space-y-6">
           {/* 다기능 크로노 모듈 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
@@ -1457,6 +1575,84 @@ export default function EngineeringHub() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* [기능 2] 오늘의 엔지니어링 투두 체크리스트 */}
+          <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg space-y-3">
+            <div className="flex items-center justify-between border-b border-[#30363d] pb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-white uppercase tracking-wider">DEV_CHECKLIST</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-950/60 text-blue-300 border border-blue-500/40">
+                  {completedTasksCount}/{tasks.length} ({taskProgressPct}%)
+                </span>
+              </div>
+              <span className="text-[10px] text-[#8b949e]">DAILY_SPRINT</span>
+            </div>
+
+            {/* 게이지 바 */}
+            <div className="h-1.5 w-full bg-[#0d1117] rounded-full overflow-hidden border border-[#21262d]">
+              <div
+                style={{ width: `${taskProgressPct}%` }}
+                className="h-full bg-gradient-to-r from-[#238636] to-[#7ee787] transition-all duration-300"
+              />
+            </div>
+
+            {/* 투두 리스트 */}
+            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+              {tasks.length === 0 ? (
+                <div className="text-[11px] text-[#8b949e] py-3 text-center">등록된 데일리 태스크가 없습니다.</div>
+              ) : (
+                tasks.map((t) => (
+                  <div
+                    key={t.id}
+                    className="flex items-center justify-between p-2 rounded bg-[#0d1117] border border-[#21262d] text-xs hover:border-[#30363d] transition"
+                  >
+                    <label className="flex items-center gap-2.5 cursor-pointer flex-1 select-none">
+                      <input
+                        type="checkbox"
+                        checked={t.is_completed}
+                        onChange={() => handleToggleTask(t)}
+                        className="rounded border-[#30363d] text-[#238636] focus:ring-0 cursor-pointer"
+                      />
+                      <span className={`${t.is_completed ? 'line-through text-[#8b949e]' : 'text-slate-200'}`}>
+                        {t.task}
+                      </span>
+                    </label>
+                    {isAuthenticated && (
+                      <button
+                        onClick={() => handleDeleteTask(t.id)}
+                        className="text-[#8b949e] hover:text-[#f85149] text-xs px-1 ml-2"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* 투두 추가 폼 */}
+            {isAuthenticated ? (
+              <form onSubmit={handleAddTask} className="flex gap-2 pt-1">
+                <input
+                  type="text"
+                  placeholder="새 스프린트 태스크 추가..."
+                  value={newTaskInput}
+                  onChange={(e) => setNewTaskInput(e.target.value)}
+                  className="flex-1 bg-[#0d1117] border border-[#30363d] px-2.5 py-1 text-xs rounded text-white focus:outline-none focus:border-[#58a6ff]"
+                />
+                <button
+                  type="submit"
+                  className="bg-[#238636] hover:bg-[#2ea043] text-white px-3 py-1 rounded text-xs font-bold transition whitespace-nowrap"
+                >
+                  + ADD
+                </button>
+              </form>
+            ) : (
+              <div className="text-[10px] text-[#8b949e] text-center pt-1">
+                🔒 체크는 누구나 가능하며, 태스크 추가/삭제는 관리자 로그인 필요
+              </div>
+            )}
           </div>
 
           {/* 대문 오른쪽 아래: 커플 텔레메트리 & 마일스톤 */}
