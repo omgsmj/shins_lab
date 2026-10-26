@@ -68,9 +68,14 @@ export default function CBTNotesPage() {
           created_at: h.created_at,
         }));
         setHistories(mapped);
-        setSelectedHistoryId((prev) => prev || mapped[0].id);
+        setSelectedHistoryId((prev) => {
+          if (prev && mapped.some((m) => m.id === prev)) return prev;
+          return mapped[0].id;
+        });
       } else {
         setHistories([]);
+        setSelectedHistoryId(null);
+        setWrongItems([]);
       }
     } catch (err) {
       console.error('기록 목록 조회 실패:', err);
@@ -169,16 +174,47 @@ export default function CBTNotesPage() {
     }
   }, [selectedHistoryId]);
 
-  // 오답 숙지 완료 (DB에서 실제 삭제)
+  // [기능 1] 시험 이력 폴더 전체 삭제 (딸린 오답도 DB에서 연쇄 삭제)
+  const handleDeleteHistory = async (e: React.MouseEvent, historyId: number) => {
+    e.stopPropagation(); // 폴더 선택 이벤트 방지
+    if (!confirm('이 시험 이력과 여기에 포함된 모든 오답을 영구 삭제하시겠습니까?')) return;
+
+    try {
+      // 1. 해당 이력의 오답 일괄 삭제
+      await supabase.from('cbt_wrong_answers').delete().eq('history_id', historyId);
+      // 2. 이력 자체 삭제
+      const { error } = await supabase.from('cbt_exam_histories').delete().eq('id', historyId);
+
+      if (error) {
+        alert(`삭제 실패: ${error.message}`);
+        return;
+      }
+
+      const updated = histories.filter((h) => h.id !== historyId);
+      setHistories(updated);
+      if (selectedHistoryId === historyId) {
+        if (updated.length > 0) {
+          setSelectedHistoryId(updated[0].id);
+        } else {
+          setSelectedHistoryId(null);
+          setWrongItems([]);
+        }
+      }
+    } catch (err) {
+      console.error('이력 삭제 중 에러 발생:', err);
+    }
+  };
+
+  // [기능 2] 개별 오답 문항 삭제 (숙지 완료 / 졸업)
   const handleRemoveWrongItem = async (id: number) => {
-    if (!confirm('이 문제를 완전히 숙지하셨습니까? 오답노트 보관함에서 영구 제거합니다.')) return;
+    if (!confirm('이 문제를 오답노트에서 영구 제거하시겠습니까?')) return;
 
     setWrongItems((prev) => prev.filter((item) => item.id !== id));
 
     try {
       const { error } = await supabase.from('cbt_wrong_answers').delete().eq('id', id);
       if (error) {
-        console.error('오답 삭제 실패:', error.message);
+        console.error('오답 개별 삭제 실패:', error.message);
       }
     } catch (err) {
       console.error('오답 삭제 통신 에러:', err);
@@ -197,7 +233,7 @@ export default function CBTNotesPage() {
   return (
     <div className="flex h-screen bg-[#090b10] text-[#c9d1d9] font-mono selection:bg-[#238636] selection:text-white">
       {/* 좌측: 응시 이력 폴더 목록 */}
-      <aside className="w-80 border-r border-[#30363d] bg-[#161b22] p-4 flex flex-col">
+      <aside className="w-84 border-r border-[#30363d] bg-[#161b22] p-4 flex flex-col shrink-0">
         <div className="mb-4 flex items-center justify-between border-b border-[#30363d] pb-3">
           <Link href="/cbt" className="text-xs text-[#58a6ff] hover:underline font-bold">
             ← CBT 시험장으로
@@ -212,23 +248,33 @@ export default function CBTNotesPage() {
             <div className="text-xs text-[#8b949e] text-center py-8">응시한 시험 이력이 없습니다.</div>
           ) : (
             histories.map((h) => (
-              <button
+              <div
                 key={h.id}
                 onClick={() => setSelectedHistoryId(h.id)}
-                className={`w-full text-left p-3 rounded-lg border text-xs transition ${
+                className={`w-full text-left p-3 rounded-lg border text-xs transition cursor-pointer relative group ${
                   selectedHistoryId === h.id
                     ? 'border-[#58a6ff] bg-[#1f6feb]/20 text-white shadow-lg'
                     : 'border-[#30363d] bg-[#0d1117] hover:bg-[#21262d] text-[#c9d1d9]'
                 }`}
               >
-                <div className="font-semibold text-white truncate">{h.folder_name}</div>
-                <div className="mt-1 flex items-center justify-between text-[11px] text-[#8b949e]">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-semibold text-white truncate max-w-[180px]">{h.folder_name}</div>
+                  {/* 회차 폴더 전체 삭제 버튼 */}
+                  <button
+                    onClick={(e) => handleDeleteHistory(e, h.id)}
+                    title="이 회차 이력 전체 삭제"
+                    className="text-[#8b949e] hover:text-[#f85149] hover:bg-[#f85149]/20 px-1.5 py-0.5 rounded text-[10px] border border-transparent hover:border-[#f85149]/40 transition"
+                  >
+                    🗑️ 삭제
+                  </button>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[11px] text-[#8b949e]">
                   <span className={h.is_passed ? 'text-[#7ee787] font-bold' : 'text-[#f85149] font-bold'}>
                     {h.score}점 ({h.is_passed ? '합격' : '불합격'})
                   </span>
                   <span>{new Date(h.created_at).toLocaleDateString('ko-KR')}</span>
                 </div>
-              </button>
+              </div>
             ))
           )}
         </div>
@@ -291,11 +337,12 @@ export default function CBTNotesPage() {
                             {isPracticeCorrect ? '✓ 정답!' : '❌ 오답'}
                           </span>
                         )}
+                        {/* 개별 오답 삭제 버튼 */}
                         <button
                           onClick={() => handleRemoveWrongItem(item.id)}
-                          className="text-[10px] px-2 py-0.5 rounded border border-[#30363d] bg-[#0d1117] text-[#8b949e] hover:text-[#7ee787] hover:border-[#238636] transition"
+                          className="text-[11px] px-2.5 py-1 rounded border border-[#f85149]/40 bg-rose-950/20 text-rose-300 hover:bg-rose-900/40 hover:border-rose-500 transition font-bold"
                         >
-                          ✓ 숙지 완료(보관함 제거)
+                          ❌ 오답 삭제
                         </button>
                       </div>
                     </div>
