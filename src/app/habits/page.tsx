@@ -1,7 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -36,34 +34,35 @@ export default function HabitsPage() {
   const [logs, setLogs] = useState<HabitLog[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [recentDays, setRecentDays] = useState<DayItem[]>([]);
-  const [todayStr, setTodayStr] = useState<string>('2026-10-26');
+  const [todayStr, setTodayStr] = useState<string>('');
 
   const [newTitle, setNewTitle] = useState<string>('');
   const [newCategory, setNewCategory] = useState<string>('HEALTH');
 
   useEffect(() => {
-    // 마운트 시점에 안전하게 날짜 배열 구성
-    const today = new Date();
-    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    if (typeof window !== 'undefined') {
+      const today = new Date();
+      const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
 
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date();
-      d.setDate(today.getDate() - (6 - i));
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      const dateStr = `${yyyy}-${mm}-${dd}`;
-      return {
-        dateStr,
-        display: `${d.getMonth() + 1}/${d.getDate()}`,
-        dayName: dayNames[d.getDay()],
-        isToday: i === 6,
-      };
-    });
+      const days = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date();
+        d.setDate(today.getDate() - (6 - i));
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+        return {
+          dateStr,
+          display: `${d.getMonth() + 1}/${d.getDate()}`,
+          dayName: dayNames[d.getDay()],
+          isToday: i === 6,
+        };
+      });
 
-    setRecentDays(days);
-    setTodayStr(days[6].dateStr);
-    fetchHabitsAndLogs();
+      setRecentDays(days);
+      setTodayStr(days[6].dateStr);
+      fetchHabitsAndLogs();
+    }
   }, []);
 
   const fetchHabitsAndLogs = async () => {
@@ -213,7 +212,7 @@ export default function HabitsPage() {
 
         <div className="flex items-center gap-4 text-xs">
           <div>
-            TODAY: <span className="text-white font-bold">{todayStr}</span>
+            TODAY: <span className="text-white font-bold">{todayStr || 'SYNCING...'}</span>
           </div>
           <div>
             SCORE: <span className="text-[#7ee787] font-bold">{todayDoneCount}/{habits.length} ({todayRatePct}%)</span>

@@ -1,7 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -27,8 +25,8 @@ const CATEGORY_MAP: Record<string, { label: string; bg: string; border: string; 
 const HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 06:00 ~ 23:00
 
 export default function PlannerPage() {
-  const [targetDate, setTargetDate] = useState<string>('2026-10-26');
-  const [todayStr, setTodayStr] = useState<string>('2026-10-26');
+  const [targetDate, setTargetDate] = useState<string>('');
+  const [todayStr, setTodayStr] = useState<string>('');
   const [blocks, setBlocks] = useState<TimeBlock[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -42,14 +40,19 @@ export default function PlannerPage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const nowFormatted = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const nowFormatted = `${yyyy}-${mm}-${dd}`;
+
       setTargetDate(nowFormatted);
       setTodayStr(nowFormatted);
 
       const updateTimeLine = () => {
-        const now = new Date();
-        const h = now.getHours();
-        const m = now.getMinutes();
+        const d = new Date();
+        const h = d.getHours();
+        const m = d.getMinutes();
         if (h >= 6 && h <= 23) {
           setCurrentMinutesFrom6AM((h - 6) * 60 + m);
         } else {
@@ -63,6 +66,7 @@ export default function PlannerPage() {
   }, []);
 
   const fetchBlocks = async (dateStr: string) => {
+    if (!dateStr) return;
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -82,13 +86,15 @@ export default function PlannerPage() {
   };
 
   useEffect(() => {
-    fetchBlocks(targetDate);
+    if (targetDate) {
+      fetchBlocks(targetDate);
+    }
   }, [targetDate]);
 
   const handleAddBlock = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = title.trim();
-    if (!trimmed) return;
+    if (!trimmed || !targetDate) return;
 
     const payload = {
       date: targetDate,

@@ -1,7 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -34,21 +32,27 @@ export default function LedgerPage() {
   const [isEditingBudget, setIsEditingBudget] = useState<boolean>(false);
   const [budgetInput, setBudgetInput] = useState<number>(600000);
 
-  // 입력 폼 상태 (기본값 정적 처리 후 마운트 시 갱신)
-  const [inputDate, setInputDate] = useState<string>('2026-10-26');
+  // 입력 폼 상태 (빌드 타임에는 정적 빈 문자열, 마운트 후 오늘 날짜 할당)
+  const [inputDate, setInputDate] = useState<string>('');
   const [inputType, setInputType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
   const [inputCategory, setInputCategory] = useState<string>('식비');
   const [inputAmount, setInputAmount] = useState<string>('');
   const [inputDesc, setInputDesc] = useState<string>('');
   const [inputPayment, setInputPayment] = useState<string>('CARD');
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-10');
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
 
-  // 인증 및 날짜 초기화
+  // 브라우저 마운트 시점에만 현재 시간 및 인증 상태 초기화
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const todayFormatted = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const todayFormatted = `${yyyy}-${mm}-${dd}`;
+      const monthFormatted = `${yyyy}-${mm}`;
+
       setInputDate(todayFormatted);
-      setSelectedMonth(todayFormatted.substring(0, 7));
+      setSelectedMonth(monthFormatted);
 
       const auth = sessionStorage.getItem('station_auth_status') === 'true';
       setIsAuthenticated(auth);
@@ -209,7 +213,7 @@ export default function LedgerPage() {
     );
   }
 
-  const filteredItems = items.filter((item) => item.date.startsWith(selectedMonth));
+  const filteredItems = items.filter((item) => selectedMonth ? item.date.startsWith(selectedMonth) : true);
   const totalExpense = filteredItems.filter((i) => i.type === 'EXPENSE').reduce((acc, cur) => acc + cur.amount, 0);
   const totalIncome = filteredItems.filter((i) => i.type === 'INCOME').reduce((acc, cur) => acc + cur.amount, 0);
   const remainingBudget = monthlyBudget - totalExpense;
@@ -460,7 +464,7 @@ export default function LedgerPage() {
             <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
               {filteredItems.length === 0 ? (
                 <div className="text-xs text-[#8b949e] py-16 text-center">
-                  선택한 달({selectedMonth})의 거래 기록이 없습니다. 좌측에서 첫 기록을 남겨보세요!
+                  선택한 달의 거래 기록이 없습니다. 좌측에서 첫 기록을 남겨보세요!
                 </div>
               ) : (
                 filteredItems.map((item) => (
