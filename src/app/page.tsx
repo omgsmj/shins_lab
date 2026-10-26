@@ -18,6 +18,12 @@ interface UserProfile {
   coreStack: string;
 }
 
+const DEFAULT_SCHEDULES: ScheduleItem[] = [
+  { id: 1, date: '2026-10-26', title: '정보처리기사 CBT 엔진 빌드', category: 'DEV' },
+  { id: 2, date: '2026-10-28', title: 'AI 파이프라인 통합 테스트', category: 'ACADEMIC' },
+  { id: 3, date: '2026-11-05', title: '기술 자소서 1차 탈고', category: 'DEV' },
+];
+
 export default function EngineeringHub() {
   // 1. 시스템 텔레메트리 & 실시간 날씨
   const [timeStr, setTimeStr] = useState<string>('');
@@ -45,12 +51,8 @@ export default function EngineeringHub() {
 - 실패를 숨기지 않는 방어적 프로그래밍과 데이터 무손실 파싱 지향.`
   );
 
-  // 4. 달력 및 일정 상태
-  const [schedules, setSchedules] = useState<ScheduleItem[]>([
-    { id: 1, date: '2026-10-26', title: '정보처리기사 CBT 엔진 빌드', category: 'DEV' },
-    { id: 2, date: '2026-10-28', title: 'AI 파이프라인 통합 테스트', category: 'ACADEMIC' },
-    { id: 3, date: '2026-11-05', title: '기술 자소서 1차 탈고', category: 'DEV' },
-  ]);
+  // 4. 달력 및 일정 상태 (영구 저장 연동)
+  const [schedules, setSchedules] = useState<ScheduleItem[]>(DEFAULT_SCHEDULES);
   const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 9, 26)); // 기준: 2026년 10월
   const [newTitle, setNewTitle] = useState<string>('');
   const [newDate, setNewDate] = useState<string>('2026-10-26');
@@ -61,7 +63,7 @@ export default function EngineeringHub() {
     '// QUICK SCRATCHPAD (Auto-saved)\n$ python -m venv venv\n$ pip install -r requirements.txt'
   );
 
-  // 시계 타이머
+  // 실시간 시계
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -78,7 +80,7 @@ export default function EngineeringHub() {
     return () => clearInterval(timer);
   }, []);
 
-  // 전주시(위도 35.8242, 경도 127.148) 실시간 날씨 페칭 (Open-Meteo)
+  // 전주시 실시간 날씨
   useEffect(() => {
     const fetchJeonjuWeather = async () => {
       try {
@@ -104,33 +106,57 @@ export default function EngineeringHub() {
     fetchJeonjuWeather();
   }, []);
 
-  // 로컬 저장된 프로필 복원
+  // 로컬 스토리지 데이터 복원 (프로필, 자소서, 스크래치패드, 일정)
   useEffect(() => {
-    const saved = localStorage.getItem('station_user_profile');
-    if (saved) {
+    const savedProfile = localStorage.getItem('station_user_profile');
+    if (savedProfile) {
       try {
-        setProfile(JSON.parse(saved));
+        setProfile(JSON.parse(savedProfile));
       } catch (e) {}
     }
-  }, []);
 
-  // Supabase 일정 불러오기
-  useEffect(() => {
-    const fetchSchedules = async () => {
+    const savedDoc = localStorage.getItem('station_career_doc');
+    if (savedDoc) setCareerDoc(savedDoc);
+
+    const savedScratch = localStorage.getItem('station_scratchpad');
+    if (savedScratch) setScratchpad(savedScratch);
+
+    // 일정 로컬 복원
+    const savedSchedules = localStorage.getItem('station_schedules');
+    if (savedSchedules) {
+      try {
+        const parsed = JSON.parse(savedSchedules);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSchedules(parsed);
+        }
+      } catch (e) {}
+    }
+
+    // Supabase DB 일정 동기화 시도
+    const fetchRemoteSchedules = async () => {
       try {
         const { data, error } = await supabase
           .from('user_schedules')
           .select('*')
           .order('date', { ascending: true });
+
         if (!error && data && data.length > 0) {
           setSchedules(data);
+          localStorage.setItem('station_schedules', JSON.stringify(data));
         }
       } catch (err) {
-        console.warn('Supabase offline, using local state.');
+        console.warn('DB offline, using local persistent storage.');
       }
     };
-    fetchSchedules();
+
+    fetchRemoteSchedules();
   }, []);
+
+  // 스크래치패드 자동 저장
+  const handleScratchpadChange = (val: string) => {
+    setScratchpad(val);
+    localStorage.setItem('station_scratchpad', val);
+  };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,6 +175,12 @@ export default function EngineeringHub() {
     alert('프로필 변경 사항이 저장되었습니다.');
   };
 
+  const handleSaveCareerDoc = () => {
+    localStorage.setItem('station_career_doc', careerDoc);
+    alert('자소서 데이터가 안전하게 영구 저장되었습니다.');
+  };
+
+  // 일정 추가 (LocalStorage + Supabase 양방향 영구 보존)
   const handleAddSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
@@ -160,7 +192,9 @@ export default function EngineeringHub() {
       category: newCategory,
     };
 
-    setSchedules((prev) => [...prev, newItem].sort((a, b) => a.date.localeCompare(b.date)));
+    const updated = [...schedules, newItem].sort((a, b) => a.date.localeCompare(b.date));
+    setSchedules(updated);
+    localStorage.setItem('station_schedules', JSON.stringify(updated));
     setNewTitle('');
 
     try {
@@ -170,16 +204,20 @@ export default function EngineeringHub() {
         category: newCategory,
       });
     } catch (err) {
-      console.warn('DB insert fallback');
+      console.warn('DB remote sync bypassed.');
     }
   };
 
+  // 일정 삭제 (LocalStorage + Supabase)
   const handleDeleteSchedule = async (id: number) => {
-    setSchedules((prev) => prev.filter((item) => item.id !== id));
+    const updated = schedules.filter((item) => item.id !== id);
+    setSchedules(updated);
+    localStorage.setItem('station_schedules', JSON.stringify(updated));
+
     try {
       await supabase.from('user_schedules').delete().eq('id', id);
     } catch (err) {
-      console.warn('DB delete fallback');
+      console.warn('DB delete bypassed.');
     }
   };
 
@@ -200,7 +238,7 @@ export default function EngineeringHub() {
             STATION_TERMINAL :: {profile.name.split(' ')[0]}
           </span>
           <span className="text-xs px-2 py-0.5 rounded bg-[#21262d] text-[#8b949e] border border-[#30363d]">
-            ENV: PRODUCTION (v2.5.0)
+            ENV: PRODUCTION (v2.6.0)
           </span>
         </div>
 
@@ -216,7 +254,6 @@ export default function EngineeringHub() {
 
       {/* 2. 빠른 실행 서브시스템 링크 (통합 런처) */}
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-        {/* CBT 통합 스위트 */}
         <Link
           href="/cbt"
           className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg hover:border-[#58a6ff] hover:bg-[#1f242c] transition group shadow"
@@ -233,7 +270,6 @@ export default function EngineeringHub() {
           </div>
         </Link>
 
-        {/* 전주대학교 기상 관측소 */}
         <Link
           href="/weather"
           className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg hover:border-[#7ee787] hover:bg-[#1f242c] transition group shadow"
@@ -250,7 +286,6 @@ export default function EngineeringHub() {
           </div>
         </Link>
 
-        {/* GitHub 원격 저장소 */}
         <a
           href="https://github.com/omgsmj/shins_lab"
           target="_blank"
@@ -259,7 +294,7 @@ export default function EngineeringHub() {
         >
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-[#8b949e] group-hover:text-[#a371f7]">REMOTE 03</span>
-            <span className="text-[10px] text-[#8b949e]">v2.5</span>
+            <span className="text-[10px] text-[#8b949e]">v2.6</span>
           </div>
           <div className="text-base font-bold text-white mt-1">GitHub 저장소 ↗</div>
           <div className="text-xs text-[#8b949e] mt-1">프로젝트 소스 코드 및 버전 관리</div>
@@ -379,7 +414,10 @@ export default function EngineeringHub() {
 
           {/* 등록된 일정 큐 리스트 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
-            <div className="text-xs font-bold text-[#8b949e] uppercase mb-3">SCHEDULED_EVENTS_QUEUE</div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-[#8b949e] uppercase">SCHEDULED_EVENTS_QUEUE</span>
+              <span className="text-[10px] text-[#238636]">STORAGE: SYNCED</span>
+            </div>
             <div className="space-y-2">
               {schedules.map((s) => (
                 <div
@@ -555,7 +593,7 @@ export default function EngineeringHub() {
                   <div className="flex justify-between items-center text-[11px]">
                     <span className="text-[#8b949e]">{careerDoc.length} characters</span>
                     <button
-                      onClick={() => alert('자소서 데이터가 브라우저 세션에 안전하게 저장되었습니다.')}
+                      onClick={handleSaveCareerDoc}
                       className="bg-[#238636] hover:bg-[#2ea043] text-white px-3 py-1 rounded text-xs font-bold"
                     >
                       COMMIT_CHANGES
@@ -566,7 +604,7 @@ export default function EngineeringHub() {
             </div>
           </div>
 
-          {/* 엔지니어링 스크래치패드 */}
+          {/* 엔지니어링 스크래치패드 (자동 저장) */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-[#8b949e] uppercase">SCRATCHPAD (CLI_NOTES)</span>
@@ -575,7 +613,7 @@ export default function EngineeringHub() {
             <textarea
               rows={4}
               value={scratchpad}
-              onChange={(e) => setScratchpad(e.target.value)}
+              onChange={(e) => handleScratchpadChange(e.target.value)}
               className="w-full bg-[#0d1117] border border-[#21262d] rounded p-2.5 text-xs text-[#7ee787] font-mono leading-relaxed focus:outline-none focus:border-[#30363d]"
             />
           </div>
