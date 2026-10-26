@@ -535,17 +535,15 @@ export default function EngineeringHub() {
     await supabase.from('study_board_logs').delete().eq('id', id);
   };
 
-  // [기능 2] 데일리 투두 토글 (에러 검증 및 확실한 DB 동기화)
+  // 데일리 투두 토글 (에러 검증 및 확실한 DB 동기화)
   const handleToggleTask = async (task: DevTask) => {
     playClickSound();
     const nextStatus = !task.is_completed;
 
-    // 1. 화면 즉시 반영 (낙관적 UI)
     setTasks((prev) =>
       prev.map((t) => (t.id === task.id ? { ...t, is_completed: nextStatus } : t))
     );
 
-    // 2. DB 업데이트
     const { error } = await supabase
       .from('dev_checklist')
       .update({ is_completed: nextStatus })
@@ -553,7 +551,6 @@ export default function EngineeringHub() {
 
     if (error) {
       console.error('투두 상태 변경 실패:', error.message);
-      // 실패 시 원래 상태로 롤백
       setTasks((prev) =>
         prev.map((t) => (t.id === task.id ? { ...t, is_completed: !nextStatus } : t))
       );
@@ -561,7 +558,7 @@ export default function EngineeringHub() {
     }
   };
 
-  // [기능 2] 데일리 투두 추가 (DB 저장 확정 후 고유 ID 매핑)
+  // 데일리 투두 추가 (DB 저장 확정 후 고유 ID 매핑)
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAuthenticated) {
@@ -574,7 +571,6 @@ export default function EngineeringHub() {
 
     setNewTaskInput('');
 
-    // DB에 insert 후 생성된 행(고유 id 포함)을 즉시 받아 상태에 반영
     const { data, error } = await supabase
       .from('dev_checklist')
       .insert({ task: trimmed, is_completed: false })
@@ -592,7 +588,7 @@ export default function EngineeringHub() {
     }
   };
 
-  // [기능 2] 데일리 투두 삭제 (DB 삭제 완료 후 화면 제거)
+  // 데일리 투두 삭제 (DB 삭제 완료 후 화면 제거)
   const handleDeleteTask = async (id: number) => {
     if (!isAuthenticated) {
       alert('관리자 로그인이 필요한 작업입니다.');
@@ -702,7 +698,7 @@ export default function EngineeringHub() {
 
   const ddayItems = schedules.filter((s) => s.isDday);
 
-  // [기능 1] 최근 12주(84일) 잔디 히트맵 데이터 계산
+  // 최근 12주(84일) 잔디 히트맵 데이터 계산
   const studyDateMinutesMap: Record<string, number> = {};
   studyLogs.forEach((l) => {
     const mins = l.durationHours * 60 + l.durationMinutes;
@@ -875,8 +871,9 @@ export default function EngineeringHub() {
         </div>
       </header>
 
-      {/* 2. 빠른 실행 서브시스템 링크 */}
-      <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+      {/* 2. 풀스택 6대 엔지니어링 서브시스템 카드 그리드 (2열 x 3행) */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+        {/* ENGINE 01: CBT 통합 시스템 */}
         <Link
           href="/cbt"
           onClick={playClickSound}
@@ -892,6 +889,7 @@ export default function EngineeringHub() {
           <div className="text-xs text-[#8b949e] mt-1">시험 응시 · 오답노트 보관함 통합</div>
         </Link>
 
+        {/* ENGINE 02: 전주대 기상 관측소 */}
         <Link
           href="/weather"
           onClick={playClickSound}
@@ -907,18 +905,69 @@ export default function EngineeringHub() {
           <div className="text-xs text-[#8b949e] mt-1">캠퍼스(효자동) 실시간 기상 관측 및 단기 예보</div>
         </Link>
 
-        <div className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg shadow flex flex-col justify-between">
+        {/* ENGINE 03: 스마트 가계부 & 예산 (보안 구역) */}
+        <Link
+          href="/ledger"
+          onClick={playClickSound}
+          className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg hover:border-[#f85149] hover:bg-[#1f242c] transition group shadow"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] text-[#8b949e]">ENGINE 03</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#a371f7]/20 text-[#d2a8ff] border border-[#a371f7]/40">
-              LOGS: {studyLogs.length}건
+            <span className="text-[10px] text-[#8b949e] group-hover:text-[#f85149]">ENGINE 03</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-950/40 text-[#f85149] border border-rose-500/40">
+              🔒 SECURE
             </span>
           </div>
-          <div className="text-base font-bold text-white mt-1">학습 로그 게시판</div>
-          <div className="text-xs text-[#8b949e] mt-1">
-            당월 누적: <span className="text-[#d2a8ff] font-bold">{Math.floor(currentMonthTotalMinutes / 60)}시간 {currentMonthTotalMinutes % 60}분</span> 기록 중
+          <div className="text-base font-bold text-white mt-1">스마트 가계부 & 예산</div>
+          <div className="text-xs text-[#8b949e] mt-1">지출 기록 · 가용 예산 추적 · 비밀번호 보호</div>
+        </Link>
+
+        {/* ENGINE 04: 습관 & 루틴 매트릭스 */}
+        <Link
+          href="/habits"
+          onClick={playClickSound}
+          className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg hover:border-[#7ee787] hover:bg-[#1f242c] transition group shadow"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-[#8b949e] group-hover:text-[#7ee787]">ENGINE 04</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#238636]/20 text-[#7ee787] border border-[#238636]/40">
+              🔥 STREAK
+            </span>
           </div>
-        </div>
+          <div className="text-base font-bold text-white mt-1">습관 & 루틴 매트릭스</div>
+          <div className="text-xs text-[#8b949e] mt-1">데일리 루틴 체크 · 7일간의 연속 달성 추적</div>
+        </Link>
+
+        {/* ENGINE 05: 프로젝트 칸반 보드 */}
+        <Link
+          href="/kanban"
+          onClick={playClickSound}
+          className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg hover:border-[#d2a8ff] hover:bg-[#1f242c] transition group shadow"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-[#8b949e] group-hover:text-[#d2a8ff]">ENGINE 05</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#a371f7]/20 text-[#d2a8ff] border border-[#a371f7]/40">
+              PIPELINE
+            </span>
+          </div>
+          <div className="text-base font-bold text-white mt-1">프로젝트 칸반 보드</div>
+          <div className="text-xs text-[#8b949e] mt-1">TODO ➔ IN PROGRESS ➔ DONE 3단계 관리</div>
+        </Link>
+
+        {/* ENGINE 06: 24H 타임블록 플래너 */}
+        <Link
+          href="/planner"
+          onClick={playClickSound}
+          className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg hover:border-[#f0883e] hover:bg-[#1f242c] transition group shadow"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-[#8b949e] group-hover:text-[#f0883e]">ENGINE 06</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#bd561d]/20 text-[#f0883e] border border-[#bd561d]/40">
+              TIMELINE
+            </span>
+          </div>
+          <div className="text-base font-bold text-white mt-1">24H 타임블록 플래너</div>
+          <div className="text-xs text-[#8b949e] mt-1">하루 24시간 블록 계획 · 실시간 시간 인디케이터</div>
+        </Link>
       </section>
 
       {/* 메인 2열 그리드 */}
@@ -1163,7 +1212,7 @@ export default function EngineeringHub() {
             </div>
           </div>
 
-          {/* [기능 1] 공부 기록 잔디밭 (GitHub Heatmap) & 누적 통계 */}
+          {/* 공부 기록 잔디밭 (GitHub Heatmap) & 누적 통계 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-4 shadow-lg space-y-4">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-2">
               <div className="flex items-center gap-2">
@@ -1608,7 +1657,7 @@ export default function EngineeringHub() {
             </div>
           </div>
 
-          {/* [기능 2] 오늘의 엔지니어링 투두 체크리스트 */}
+          {/* 오늘의 엔지니어링 투두 체크리스트 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg space-y-3">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-2">
               <div className="flex items-center gap-2">
