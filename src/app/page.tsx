@@ -535,48 +535,79 @@ export default function EngineeringHub() {
     await supabase.from('study_board_logs').delete().eq('id', id);
   };
 
-  // [기능 2] 데일리 투두 토글 & 추가 & 삭제 핸들러
+  // [기능 2] 데일리 투두 토글 (에러 검증 및 확실한 DB 동기화)
   const handleToggleTask = async (task: DevTask) => {
     playClickSound();
-    const updatedStatus = !task.is_completed;
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, is_completed: updatedStatus } : t)));
-    await supabase.from('dev_checklist').update({ is_completed: updatedStatus }).eq('id', task.id);
+    const nextStatus = !task.is_completed;
+
+    // 1. 화면 즉시 반영 (낙관적 UI)
+    setTasks((prev) =>
+      prev.map((t) => (t.id === task.id ? { ...t, is_completed: nextStatus } : t))
+    );
+
+    // 2. DB 업데이트
+    const { error } = await supabase
+      .from('dev_checklist')
+      .update({ is_completed: nextStatus })
+      .eq('id', task.id);
+
+    if (error) {
+      console.error('투두 상태 변경 실패:', error.message);
+      // 실패 시 원래 상태로 롤백
+      setTasks((prev) =>
+        prev.map((t) => (t.id === task.id ? { ...t, is_completed: !nextStatus } : t))
+      );
+      alert(`DB 반영 실패: ${error.message}`);
+    }
   };
 
+  // [기능 2] 데일리 투두 추가 (DB 저장 확정 후 고유 ID 매핑)
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAuthenticated) {
-      alert('관리자 로그인이 필요합니다.');
+      alert('관리자 로그인이 필요한 작업입니다.');
       return;
     }
-    if (!newTaskInput.trim()) return;
+    const trimmed = newTaskInput.trim();
+    if (!trimmed) return;
     playClickSound();
 
-    const tempTask: DevTask = {
-      id: Date.now(),
-      task: newTaskInput.trim(),
-      is_completed: false,
-    };
-
-    setTasks((prev) => [...prev, tempTask]);
     setNewTaskInput('');
 
-    const { data } = await supabase
+    // DB에 insert 후 생성된 행(고유 id 포함)을 즉시 받아 상태에 반영
+    const { data, error } = await supabase
       .from('dev_checklist')
-      .insert({ task: tempTask.task, is_completed: false })
-      .select()
+      .insert({ task: trimmed, is_completed: false })
+      .select('*')
       .single();
 
+    if (error) {
+      alert(`태스크 등록 실패: ${error.message}`);
+      setNewTaskInput(trimmed);
+      return;
+    }
+
     if (data) {
-      setTasks((prev) => prev.map((t) => (t.id === tempTask.id ? { ...t, id: data.id } : t)));
+      setTasks((prev) => [...prev, data]);
     }
   };
 
+  // [기능 2] 데일리 투두 삭제 (DB 삭제 완료 후 화면 제거)
   const handleDeleteTask = async (id: number) => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      alert('관리자 로그인이 필요한 작업입니다.');
+      return;
+    }
     playClickSound();
+
+    const { error } = await supabase.from('dev_checklist').delete().eq('id', id);
+
+    if (error) {
+      alert(`태스크 삭제 실패: ${error.message}`);
+      return;
+    }
+
     setTasks((prev) => prev.filter((t) => t.id !== id));
-    await supabase.from('dev_checklist').delete().eq('id', id);
   };
 
   // D-Day 계산 유틸리티
