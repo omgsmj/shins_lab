@@ -214,37 +214,55 @@ export default function EngineeringHub() {
         </div>
       </header>
 
-      {/* 2. 빠른 실행 서브시스템 링크 (CLI LAUNCHER) */}
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      {/* 2. 빠른 실행 서브시스템 링크 (통합 런처) */}
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        {/* CBT 통합 스위트 */}
         <Link
           href="/cbt"
-          className="border border-[#30363d] bg-[#161b22] p-3 rounded hover:border-[#58a6ff] hover:bg-[#1f242c] transition group"
+          className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg hover:border-[#58a6ff] hover:bg-[#1f242c] transition group shadow"
         >
-          <div className="text-[10px] text-[#8b949e] group-hover:text-[#58a6ff]">ENGINE 01</div>
-          <div className="text-sm font-bold text-white mt-1">CBT 시험장 (100제)</div>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-[#8b949e] group-hover:text-[#58a6ff]">ENGINE 01</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1f6feb]/20 text-[#58a6ff] border border-[#1f6feb]/40">
+              SUITE
+            </span>
+          </div>
+          <div className="text-base font-bold text-white mt-1">CBT 통합 시스템</div>
+          <div className="text-xs text-[#8b949e] mt-1">
+            시험 응시 · 오답노트 보관함 · 문제 주입기 통합
+          </div>
         </Link>
+
+        {/* 전주대학교 기상 관측소 */}
         <Link
-          href="/cbt/notes"
-          className="border border-[#30363d] bg-[#161b22] p-3 rounded hover:border-[#d29922] hover:bg-[#1f242c] transition group"
+          href="/weather"
+          className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg hover:border-[#7ee787] hover:bg-[#1f242c] transition group shadow"
         >
-          <div className="text-[10px] text-[#8b949e] group-hover:text-[#d29922]">STORAGE 02</div>
-          <div className="text-sm font-bold text-white mt-1">오답노트 보관함</div>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-[#8b949e] group-hover:text-[#7ee787]">ENGINE 02</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#238636]/20 text-[#7ee787] border border-[#238636]/40">
+              LIVE
+            </span>
+          </div>
+          <div className="text-base font-bold text-white mt-1">전주대 기상 관측소</div>
+          <div className="text-xs text-[#8b949e] mt-1">
+            캠퍼스(효자동) 실시간 기상 관측 및 단기 예보
+          </div>
         </Link>
-        <Link
-          href="/admin/cbt"
-          className="border border-[#30363d] bg-[#161b22] p-3 rounded hover:border-[#f85149] hover:bg-[#1f242c] transition group"
-        >
-          <div className="text-[10px] text-[#8b949e] group-hover:text-[#f85149]">ADMIN 03</div>
-          <div className="text-sm font-bold text-white mt-1">문제 데이터 주입기</div>
-        </Link>
+
+        {/* GitHub 원격 저장소 */}
         <a
-          href="https://github.com"
+          href="https://github.com/omgsmj/shins_lab"
           target="_blank"
           rel="noreferrer"
-          className="border border-[#30363d] bg-[#161b22] p-3 rounded hover:border-[#a371f7] hover:bg-[#1f242c] transition group"
+          className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg hover:border-[#a371f7] hover:bg-[#1f242c] transition group shadow"
         >
-          <div className="text-[10px] text-[#8b949e] group-hover:text-[#a371f7]">REMOTE 04</div>
-          <div className="text-sm font-bold text-white mt-1">GitHub 저장소 ↗</div>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-[#8b949e] group-hover:text-[#a371f7]">REMOTE 03</span>
+            <span className="text-[10px] text-[#8b949e]">v2.5</span>
+          </div>
+          <div className="text-base font-bold text-white mt-1">GitHub 저장소 ↗</div>
+          <div className="text-xs text-[#8b949e] mt-1">프로젝트 소스 코드 및 버전 관리</div>
         </a>
       </section>
 
