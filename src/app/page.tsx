@@ -19,6 +19,13 @@ interface UserProfile {
   coreStack: string;
 }
 
+interface StudyRecord {
+  id: number;
+  subject: string;
+  minutes: number;
+  date: string;
+}
+
 const DEFAULT_SCHEDULES: ScheduleItem[] = [
   { id: 1, date: '2026-10-26', title: '정보처리기사 CBT 엔진 빌드', category: 'DEV', isDday: false },
   { id: 2, date: '2026-10-28', title: 'AI 파이프라인 통합 테스트', category: 'ACADEMIC', isDday: true },
@@ -27,7 +34,6 @@ const DEFAULT_SCHEDULES: ScheduleItem[] = [
 ];
 
 export default function EngineeringHub() {
-  // 클라이언트 마운트 가드 (SSR/Prerender 에러 방지)
   const [isMounted, setIsMounted] = useState<boolean>(false);
 
   // 1. 시스템 텔레메트리 & 사운드
@@ -79,36 +85,40 @@ export default function EngineeringHub() {
   const [newIsDday, setNewIsDday] = useState<boolean>(false);
   const [isDdayHovered, setIsDdayHovered] = useState<boolean>(false);
 
-  // 7. 포커스 타이머 (Pomodoro)
-  const [focusTimeLeft, setFocusTimeLeft] = useState<number>(25 * 60);
-  const [isFocusRunning, setIsFocusRunning] = useState<boolean>(false);
-  const [focusMode, setFocusMode] = useState<'WORK' | 'REST'>('WORK');
+  // 7. 다기능 크로노 모듈 (타이머 vs 스톱워치)
+  const [clockMode, setClockMode] = useState<'TIMER' | 'STOPWATCH'>('TIMER');
+  const [customMinInput, setCustomMinInput] = useState<number>(25);
+  const [timerLeft, setTimerLeft] = useState<number>(25 * 60);
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
 
-  // 8. 스크래치패드
+  const [stopwatchTime, setStopwatchTime] = useState<number>(0);
+  const [isStopwatchRunning, setIsStopwatchRunning] = useState<boolean>(false);
+
+  // 8. 공부 시간 기록기
+  const [studyLogs, setStudyLogs] = useState<StudyRecord[]>([]);
+  const [newStudySubject, setNewStudySubject] = useState<string>('정처기 CBT');
+  const [newStudyMinutes, setNewStudyMinutes] = useState<number>(30);
+
+  // 9. 스크래치패드
   const [scratchpad, setScratchpad] = useState<string>(
     '// QUICK SCRATCHPAD (Auto-saved)\n$ python -m venv venv\n$ pip install -r requirements.txt'
   );
 
-  // 클라이언트 마운트 감지
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // Web Audio API 기계식 스위치 클릭음 (SSR 완전 방어)
+  // Web Audio API 기계식 스위치 클릭음
   const playClickSound = () => {
     if (!soundEnabled || typeof window === 'undefined') return;
     try {
       if (!audioCtxRef.current) {
         const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        if (AudioContextClass) {
-          audioCtxRef.current = new AudioContextClass();
-        }
+        if (AudioContextClass) audioCtxRef.current = new AudioContextClass();
       }
       const ctx = audioCtxRef.current;
       if (ctx) {
-        if (ctx.state === 'suspended') {
-          ctx.resume();
-        }
+        if (ctx.state === 'suspended') ctx.resume();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'triangle';
@@ -141,28 +151,27 @@ export default function EngineeringHub() {
     return () => clearInterval(timer);
   }, []);
 
-  // 포커스 타이머 카운트다운
+  // 커스텀 타이머 루프
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (isFocusRunning && focusTimeLeft > 0) {
-      interval = setInterval(() => {
-        setFocusTimeLeft((prev) => prev - 1);
-      }, 1000);
-    } else if (focusTimeLeft === 0) {
+    if (isTimerRunning && timerLeft > 0) {
+      interval = setInterval(() => setTimerLeft((prev) => prev - 1), 1000);
+    } else if (timerLeft === 0 && isTimerRunning) {
       playClickSound();
-      if (focusMode === 'WORK') {
-        alert('🎉 25분 집중 세션 완료! 5분 휴식을 시작합니다.');
-        setFocusMode('REST');
-        setFocusTimeLeft(5 * 60);
-      } else {
-        alert('⚡ 5분 휴식 완료! 새로운 집중 세션을 시작합니다.');
-        setFocusMode('WORK');
-        setFocusTimeLeft(25 * 60);
-      }
-      setIsFocusRunning(false);
+      alert('⏰ 타이머 시간이 종료되었습니다!');
+      setIsTimerRunning(false);
     }
     return () => clearInterval(interval);
-  }, [isFocusRunning, focusTimeLeft, focusMode]);
+  }, [isTimerRunning, timerLeft]);
+
+  // 스톱워치 루프
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isStopwatchRunning) {
+      interval = setInterval(() => setStopwatchTime((prev) => prev + 1), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isStopwatchRunning]);
 
   // 전주시 실시간 기상 관측 및 특보 감지
   useEffect(() => {
@@ -239,6 +248,14 @@ export default function EngineeringHub() {
       } catch (e) {}
     }
 
+    const savedStudyLogs = localStorage.getItem('station_study_logs');
+    if (savedStudyLogs) {
+      try {
+        const parsed = JSON.parse(savedStudyLogs);
+        if (Array.isArray(parsed)) setStudyLogs(parsed);
+      } catch (e) {}
+    }
+
     const fetchRemoteSchedules = async () => {
       try {
         const { data, error } = await supabase.from('user_schedules').select('*').order('date', { ascending: true });
@@ -301,7 +318,42 @@ export default function EngineeringHub() {
     } catch (err) {}
   };
 
-  // D-Day 계산 유틸리티 (서버 Prerender 안전화)
+  // 공부 시간 기록 추가
+  const handleAddStudyLog = (e: React.FormEvent) => {
+    e.preventDefault();
+    playClickSound();
+    if (newStudyMinutes <= 0) return;
+
+    const newLog: StudyRecord = {
+      id: Date.now(),
+      subject: newStudySubject,
+      minutes: Number(newStudyMinutes),
+      date: new Date().toISOString().split('T')[0],
+    };
+
+    const updated = [newLog, ...studyLogs];
+    setStudyLogs(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('station_study_logs', JSON.stringify(updated));
+    }
+  };
+
+  // 사귄 날짜 (2019-12-07, 당일=1일) 계산기
+  const calculateLoveDays = () => {
+    try {
+      const startDate = new Date(2019, 11, 7); // 2019년 12월 7일
+      startDate.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const diffTime = today.getTime() - startDate.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // 1일차 포함
+      return diffDays;
+    } catch (e) {
+      return 2516;
+    }
+  };
+
+  // D-Day 계산 유틸리티
   const calculateDday = (targetDateStr: string) => {
     if (!targetDateStr) return 'D-DAY';
     try {
@@ -322,10 +374,16 @@ export default function EngineeringHub() {
   };
 
   const formatTimer = (sec: number) => {
-    const m = Math.floor(sec / 60);
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
     const s = sec % 60;
+    if (h > 0) {
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
+
+  const totalStudyMinutes = studyLogs.reduce((acc, cur) => acc + cur.minutes, 0);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -409,7 +467,7 @@ export default function EngineeringHub() {
         </div>
       </header>
 
-      {/* 2. 빠른 실행 서브시스템 링크 (통합 런처) */}
+      {/* 2. 빠른 실행 서브시스템 링크 (통합 런처: CBT + 날씨 + 공부 기록) */}
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         <Link
           href="/cbt"
@@ -441,20 +499,38 @@ export default function EngineeringHub() {
           <div className="text-xs text-[#8b949e] mt-1">캠퍼스(효자동) 실시간 기상 관측 및 단기 예보</div>
         </Link>
 
-        <a
-          href="https://github.com/omgsmj/shins_lab"
-          target="_blank"
-          rel="noreferrer"
-          onClick={playClickSound}
-          className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg hover:border-[#a371f7] hover:bg-[#1f242c] transition group shadow"
-        >
+        {/* 공부 시간 기록 패널 (GitHub 대체) */}
+        <div className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg shadow flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] text-[#8b949e] group-hover:text-[#a371f7]">REMOTE 03</span>
-            <span className="text-[10px] text-[#8b949e]">v2.7</span>
+            <span className="text-[10px] text-[#8b949e]">ENGINE 03</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#a371f7]/20 text-[#d2a8ff] border border-[#a371f7]/40">
+              TOTAL: {Math.floor(totalStudyMinutes / 60)}h {totalStudyMinutes % 60}m
+            </span>
           </div>
-          <div className="text-base font-bold text-white mt-1">GitHub 저장소 ↗</div>
-          <div className="text-xs text-[#8b949e] mt-1">프로젝트 소스 코드 및 버전 관리</div>
-        </a>
+          <div className="text-base font-bold text-white mt-1">공부 시간 트래커</div>
+          <form onSubmit={handleAddStudyLog} className="mt-2 flex gap-1.5 items-center">
+            <input
+              type="text"
+              value={newStudySubject}
+              onChange={(e) => setNewStudySubject(e.target.value)}
+              placeholder="과목"
+              className="bg-[#0d1117] border border-[#30363d] text-[11px] px-2 py-1 rounded text-white w-24 focus:outline-none focus:border-[#a371f7]"
+            />
+            <input
+              type="number"
+              value={newStudyMinutes}
+              onChange={(e) => setNewStudyMinutes(Number(e.target.value))}
+              placeholder="분"
+              className="bg-[#0d1117] border border-[#30363d] text-[11px] px-2 py-1 rounded text-white w-14 focus:outline-none focus:border-[#a371f7]"
+            />
+            <button
+              type="submit"
+              className="bg-[#6e40c9] hover:bg-[#8957e5] text-white text-[11px] px-2.5 py-1 rounded font-bold transition whitespace-nowrap"
+            >
+              +LOG
+            </button>
+          </form>
+        </div>
       </section>
 
       {/* 메인 2열 그리드: 일정/캘린더 vs 프로필/자소서 금고 */}
@@ -560,7 +636,7 @@ export default function EngineeringHub() {
               {daysArray.map((d) => {
                 const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                 const matchedSchedules = schedules.filter((s) => s.date === dateKey);
-                const isToday = d === 26 && month === 9; // 오늘 강조
+                const isToday = d === 26 && month === 9;
 
                 return (
                   <div
@@ -601,7 +677,7 @@ export default function EngineeringHub() {
               })}
             </div>
 
-            {/* 일정 추가 폼 (D-Day 지정 포함) */}
+            {/* 일정 추가 폼 */}
             <form onSubmit={handleAddSchedule} className="pt-3 border-t border-[#30363d] flex flex-col sm:flex-row gap-2 items-center">
               <input
                 type="date"
@@ -687,50 +763,131 @@ export default function EngineeringHub() {
           </div>
         </section>
 
-        {/* [우측 5열]: 포커스 타이머 + 대표소개 & 자소서 금고 */}
+        {/* [우측 5열]: 크로노 모듈(타이머/스톱워치) + 자소서 금고 + 커플 디데이 위젯 */}
         <section className="lg:col-span-5 space-y-6">
-          {/* 포커스 타이머 (Pomodoro Terminal) */}
+          {/* 다기능 크로노 모듈 (타이머 & 스톱워치) */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-2 mb-3">
-              <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <span>⏱️ FOCUS_POMODORO</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${focusMode === 'WORK' ? 'bg-rose-900/40 text-rose-300 border border-rose-500/40' : 'bg-emerald-900/40 text-emerald-300 border border-emerald-500/40'}`}>
-                  {focusMode === 'WORK' ? '25M FOCUS' : '5M REST'}
-                </span>
-              </span>
-              <span className="text-[10px] text-[#8b949e]">TERMINAL CLOCK</span>
-            </div>
-
-            <div className="flex items-center justify-between my-2">
-              <div className="text-4xl font-extrabold font-mono text-white tracking-wider">
-                {formatTimer(focusTimeLeft)}
-              </div>
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <button
                   onClick={() => {
                     playClickSound();
-                    setIsFocusRunning(!isFocusRunning);
+                    setClockMode('TIMER');
                   }}
-                  className={`px-3 py-1.5 rounded text-xs font-bold transition ${
-                    isFocusRunning
-                      ? 'bg-amber-600 hover:bg-amber-500 text-white'
-                      : 'bg-[#238636] hover:bg-[#2ea043] text-white'
+                  className={`text-xs px-2 py-0.5 rounded font-bold transition ${
+                    clockMode === 'TIMER' ? 'bg-[#58a6ff] text-black' : 'text-[#8b949e] hover:text-white'
                   }`}
                 >
-                  {isFocusRunning ? 'PAUSE' : 'START'}
+                  CUSTOM_TIMER
                 </button>
                 <button
                   onClick={() => {
                     playClickSound();
-                    setIsFocusRunning(false);
-                    setFocusTimeLeft(focusMode === 'WORK' ? 25 * 60 : 5 * 60);
+                    setClockMode('STOPWATCH');
                   }}
-                  className="px-2.5 py-1.5 rounded bg-[#21262d] hover:bg-[#30363d] text-xs text-slate-300 border border-[#30363d]"
+                  className={`text-xs px-2 py-0.5 rounded font-bold transition ${
+                    clockMode === 'STOPWATCH' ? 'bg-[#58a6ff] text-black' : 'text-[#8b949e] hover:text-white'
+                  }`}
                 >
-                  RESET
+                  STOPWATCH
                 </button>
               </div>
+              <span className="text-[10px] text-[#8b949e]">CHRONO_MODULE</span>
             </div>
+
+            {clockMode === 'TIMER' ? (
+              <div>
+                <div className="flex items-center justify-between my-2">
+                  <div className="text-4xl font-extrabold font-mono text-white tracking-wider">
+                    {formatTimer(timerLeft)}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        playClickSound();
+                        setIsTimerRunning(!isTimerRunning);
+                      }}
+                      className={`px-3 py-1.5 rounded text-xs font-bold transition ${
+                        isTimerRunning ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-[#238636] hover:bg-[#2ea043] text-white'
+                      }`}
+                    >
+                      {isTimerRunning ? 'PAUSE' : 'START'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        playClickSound();
+                        setIsTimerRunning(false);
+                        setTimerLeft(customMinInput * 60);
+                      }}
+                      className="px-2.5 py-1.5 rounded bg-[#21262d] hover:bg-[#30363d] text-xs text-slate-300 border border-[#30363d]"
+                    >
+                      RESET
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2 border-t border-[#21262d] text-xs text-[#8b949e]">
+                  <span>시간 설정(분):</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="180"
+                    value={customMinInput}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setCustomMinInput(val);
+                      if (!isTimerRunning) setTimerLeft(val * 60);
+                    }}
+                    className="w-16 bg-[#0d1117] border border-[#30363d] rounded px-2 py-0.5 text-white text-xs focus:outline-none"
+                  />
+                  <div className="flex gap-1 ml-auto">
+                    {[15, 25, 45, 60].map((preset) => (
+                      <button
+                        key={preset}
+                        onClick={() => {
+                          playClickSound();
+                          setCustomMinInput(preset);
+                          setIsTimerRunning(false);
+                          setTimerLeft(preset * 60);
+                        }}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-[#21262d] text-[#c9d1d9] hover:bg-[#30363d]"
+                      >
+                        {preset}m
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between my-2">
+                <div className="text-4xl font-extrabold font-mono text-[#7ee787] tracking-wider">
+                  {formatTimer(stopwatchTime)}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      setIsStopwatchRunning(!isStopwatchRunning);
+                    }}
+                    className={`px-3 py-1.5 rounded text-xs font-bold transition ${
+                      isStopwatchRunning ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-[#238636] hover:bg-[#2ea043] text-white'
+                    }`}
+                  >
+                    {isStopwatchRunning ? 'PAUSE' : 'START'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      setIsStopwatchRunning(false);
+                      setStopwatchTime(0);
+                    }}
+                    className="px-2.5 py-1.5 rounded bg-[#21262d] hover:bg-[#30363d] text-xs text-slate-300 border border-[#30363d]"
+                  >
+                    RESET
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 대표 프로필 & 자소서 금고 */}
@@ -879,7 +1036,7 @@ export default function EngineeringHub() {
                 <div className="space-y-3">
                   <div className="text-[10px] text-[#8b949e]">* 상시 수정 및 영구 보존 모드입니다.</div>
                   <textarea
-                    rows={10}
+                    rows={8}
                     value={careerDoc}
                     onChange={(e) => setCareerDoc(e.target.value)}
                     className="w-full bg-[#161b22] border border-[#30363d] rounded p-3 text-xs text-[#c9d1d9] leading-relaxed focus:outline-none focus:border-[#7ee787] font-mono"
@@ -902,6 +1059,31 @@ export default function EngineeringHub() {
             </div>
           </div>
 
+          {/* 대문 오른쪽 아래: 커플 디데이 위젯 (2019-12-07 ~ Day N) */}
+          <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
+            <div className="flex items-center justify-between border-b border-[#30363d] pb-2 mb-3">
+              <span className="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span>❤️ COUPLE_TELEMETRY</span>
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-rose-950/60 text-rose-300 border border-rose-500/40 font-bold">
+                SINCE 2019.12.07
+              </span>
+            </div>
+
+            <div className="flex items-baseline justify-between">
+              <div>
+                <div className="text-xs text-[#8b949e]">함께한 시간 (사귄 날 = 1일)</div>
+                <div className="text-3xl font-extrabold font-mono text-white mt-1">
+                  Day <span className="text-rose-400">{isMounted ? calculateLoveDays() : '---'}</span>
+                </div>
+              </div>
+              <div className="text-right text-[11px] text-[#8b949e]">
+                <div>시작일: 2019년 12월 7일</div>
+                <div className="text-[#7ee787]">IN LOVE FOREVER</div>
+              </div>
+            </div>
+          </div>
+
           {/* 엔지니어링 스크래치패드 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="flex items-center justify-between mb-2">
@@ -909,7 +1091,7 @@ export default function EngineeringHub() {
               <span className="text-[10px] text-[#238636]">AUTOSAVE_ACTIVE</span>
             </div>
             <textarea
-              rows={4}
+              rows={3}
               value={scratchpad}
               onChange={(e) => {
                 setScratchpad(e.target.value);
