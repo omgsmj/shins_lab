@@ -38,13 +38,20 @@ const DEFAULT_SCHEDULES: ScheduleItem[] = [
 export default function EngineeringHub() {
   const [isMounted, setIsMounted] = useState<boolean>(false);
 
-  // 1. 시스템 텔레메트리 & 사운드
+  // 1. 관리자 통합 인증 상태
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [adminId, setAdminId] = useState<string>('');
+  const [adminPw, setAdminPw] = useState<string>('');
+  const [authError, setAuthError] = useState<boolean>(false);
+  const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
+
+  // 2. 시스템 텔레메트리 & 사운드
   const [timeStr, setTimeStr] = useState<string>('');
   const [uptime, setUptime] = useState<number>(0);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // 2. 기상 관측 및 특보
+  // 3. 기상 관측 및 특보
   const [weatherStr, setWeatherStr] = useState<string>('WEATHER SYNCING...');
   const [weatherAlert, setWeatherAlert] = useState<{ active: boolean; msg: string; type: 'rain' | 'snow' | 'storm' | 'clear' }>({
     active: false,
@@ -52,7 +59,7 @@ export default function EngineeringHub() {
     type: 'clear',
   });
 
-  // 3. 프로필 정보
+  // 4. 프로필 정보
   const [profile, setProfile] = useState<UserProfile>({
     name: '신민종 (SHIN MINJONG)',
     affiliation: '전주대학교 (Senior)',
@@ -61,10 +68,7 @@ export default function EngineeringHub() {
   });
   const [isEditingProfile, setIsEditingProfile] = useState<boolean>(false);
 
-  // 4. 인증 & 자소서
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [passcode, setPasscode] = useState<string>('');
-  const [authError, setAuthError] = useState<boolean>(false);
+  // 5. 자소서 금고 내용
   const [careerDoc, setCareerDoc] = useState<string>(
     `[핵심 역량 및 엔지니어링 지향점]
 - Python, OpenCV 기반의 컴퓨터 비전 파이프라인 및 응용 GUI 소프트웨어 구축 역량.
@@ -73,21 +77,21 @@ export default function EngineeringHub() {
 - 실패를 숨기지 않는 방어적 프로그래밍과 데이터 무손실 파싱 지향.`
   );
 
-  // 5. 올해/이달의 목표
+  // 6. 올해/이달의 목표
   const [yearlyGoal, setYearlyGoal] = useState<string>('2026 목표: 정보처리기사 취득 및 컴퓨터비전 취업 포트폴리오 완성');
   const [monthlyGoal, setMonthlyGoal] = useState<string>('10월 목표: CBT 엔진 고도화 및 전주대 날씨 과제 아키텍처 배포');
   const [isEditingGoals, setIsEditingGoals] = useState<boolean>(false);
 
-  // 6. 달력 및 일정 (D-Day 포함)
+  // 7. 달력 및 일정 (D-Day 포함)
   const [schedules, setSchedules] = useState<ScheduleItem[]>(DEFAULT_SCHEDULES);
-  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 9, 26)); // 기준: 2026년 10월
+  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 9, 26));
   const [newTitle, setNewTitle] = useState<string>('');
   const [newDate, setNewDate] = useState<string>('2026-10-26');
   const [newCategory, setNewCategory] = useState<'DEV' | 'ACADEMIC' | 'PERSONAL'>('DEV');
   const [newIsDday, setNewIsDday] = useState<boolean>(false);
   const [isDdayHovered, setIsDdayHovered] = useState<boolean>(false);
 
-  // 7. 다기능 크로노 모듈 (타이머 vs 스톱워치)
+  // 8. 다기능 크로노 모듈 (타이머 vs 스톱워치)
   const [clockMode, setClockMode] = useState<'TIMER' | 'STOPWATCH'>('TIMER');
   const [customMinInput, setCustomMinInput] = useState<number>(25);
   const [timerLeft, setTimerLeft] = useState<number>(25 * 60);
@@ -96,7 +100,7 @@ export default function EngineeringHub() {
   const [stopwatchTime, setStopwatchTime] = useState<number>(0);
   const [isStopwatchRunning, setIsStopwatchRunning] = useState<boolean>(false);
 
-  // 8. 학습 로그 게시판 상태
+  // 9. 학습 로그 게시판
   const [studyLogs, setStudyLogs] = useState<StudyBoardLog[]>([
     { id: 1, date: '2026-10-25', subject: '정처기 CBT', durationHours: 2, durationMinutes: 30, summary: '1과목 소프트웨어 설계 기출 80제 풀이' },
     { id: 2, date: '2026-10-26', subject: '인공지능/비전', durationHours: 3, durationMinutes: 10, summary: 'OpenCV 기반 텔레메트리 파이프라인 디버깅' },
@@ -107,7 +111,7 @@ export default function EngineeringHub() {
   const [logMinutes, setLogMinutes] = useState<number>(30);
   const [logSummary, setLogSummary] = useState<string>('');
 
-  // 9. 스크래치패드
+  // 10. 스크래치패드
   const [scratchpad, setScratchpad] = useState<string>(
     '// QUICK SCRATCHPAD (Auto-saved)\n$ python -m venv venv\n$ pip install -r requirements.txt'
   );
@@ -232,6 +236,9 @@ export default function EngineeringHub() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    const savedAuth = sessionStorage.getItem('station_auth_status');
+    if (savedAuth === 'true') setIsAuthenticated(true);
+
     const savedProfile = localStorage.getItem('station_user_profile');
     if (savedProfile) {
       try { setProfile(JSON.parse(savedProfile)); } catch (e) {}
@@ -276,7 +283,32 @@ export default function EngineeringHub() {
     fetchRemoteSchedules();
   }, []);
 
+  // 통합 로그인 처리
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    playClickSound();
+    if (adminId === 'admin' && adminPw === 'tlsalswhd') {
+      setIsAuthenticated(true);
+      setAuthError(false);
+      setShowLoginModal(false);
+      setAdminId('');
+      setAdminPw('');
+      sessionStorage.setItem('station_auth_status', 'true');
+    } else {
+      setAuthError(true);
+    }
+  };
+
+  const handleLogout = () => {
+    playClickSound();
+    setIsAuthenticated(false);
+    setIsEditingProfile(false);
+    setIsEditingGoals(false);
+    sessionStorage.removeItem('station_auth_status');
+  };
+
   const handleSaveGoals = () => {
+    if (!isAuthenticated) return;
     playClickSound();
     localStorage.setItem('station_yearly_goal', yearlyGoal);
     localStorage.setItem('station_monthly_goal', monthlyGoal);
@@ -285,6 +317,10 @@ export default function EngineeringHub() {
 
   const handleAddSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAuthenticated) {
+      alert('관리자 로그인이 필요한 작업입니다.');
+      return;
+    }
     playClickSound();
     if (!newTitle.trim()) return;
 
@@ -315,6 +351,10 @@ export default function EngineeringHub() {
   };
 
   const handleDeleteSchedule = async (id: number) => {
+    if (!isAuthenticated) {
+      alert('관리자 로그인이 필요한 작업입니다.');
+      return;
+    }
     playClickSound();
     const updated = schedules.filter((item) => item.id !== id);
     setSchedules(updated);
@@ -326,9 +366,12 @@ export default function EngineeringHub() {
     } catch (err) {}
   };
 
-  // 학습 로그 게시판 등록 핸들러
   const handleAddStudyLog = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAuthenticated) {
+      alert('관리자 로그인이 필요한 작업입니다.');
+      return;
+    }
     playClickSound();
     const durationTotalMin = logHours * 60 + logMinutes;
     if (durationTotalMin <= 0) return;
@@ -351,6 +394,10 @@ export default function EngineeringHub() {
   };
 
   const handleDeleteStudyLog = (id: number) => {
+    if (!isAuthenticated) {
+      alert('관리자 로그인이 필요한 작업입니다.');
+      return;
+    }
     playClickSound();
     const updated = studyLogs.filter((item) => item.id !== id);
     setStudyLogs(updated);
@@ -359,7 +406,6 @@ export default function EngineeringHub() {
     }
   };
 
-  // D-Day 계산 유틸리티
   const calculateDday = (targetDateStr: string) => {
     if (!targetDateStr) return 'D-DAY';
     try {
@@ -379,20 +425,17 @@ export default function EngineeringHub() {
     }
   };
 
-  // 커플 기념일 및 다가오는 마일스톤 연산 엔진
   const calculateCoupleMilestones = () => {
-    const startDate = new Date(2019, 11, 7); // 2019-12-07
+    const startDate = new Date(2019, 11, 7);
     startDate.setHours(0, 0, 0, 0);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const diffDays = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-    // 1. 다음 100일 단위 (예: 2600일)
     const nextHundreds = Math.ceil(diffDays / 100) * 100 === diffDays ? diffDays + 100 : Math.ceil(diffDays / 100) * 100;
     const daysUntilNextHundreds = nextHundreds - diffDays;
 
-    // 2. 다음 N주년 계산
     const currentYear = today.getFullYear();
     let nextAnnivYear = currentYear;
     let nextAnnivDate = new Date(nextAnnivYear, 11, 7);
@@ -403,12 +446,10 @@ export default function EngineeringHub() {
     const nextAnnivYears = nextAnnivYear - 2019;
     const diffAnnivDays = Math.round((nextAnnivDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-    // 3. 여자친구 다음 생일 (05-21)
     let gfNextBday = new Date(currentYear, 4, 21);
     if (today > gfNextBday) gfNextBday = new Date(currentYear + 1, 4, 21);
     const diffGfDays = Math.round((gfNextBday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-    // 4. 본인 다음 생일 (12-18)
     let myNextBday = new Date(currentYear, 11, 18);
     if (today > myNextBday) myNextBday = new Date(currentYear + 1, 11, 18);
     const diffMyDays = Math.round((myNextBday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
@@ -436,7 +477,6 @@ export default function EngineeringHub() {
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  // 달력 및 이번 달 통계 계산
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const currentMonthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
@@ -444,7 +484,6 @@ export default function EngineeringHub() {
   const currentMonthLogs = studyLogs.filter((log) => log.date.startsWith(currentMonthKey));
   const currentMonthTotalMinutes = currentMonthLogs.reduce((acc, cur) => acc + cur.durationHours * 60 + cur.durationMinutes, 0);
 
-  // 과목별 점유율 통계
   const subjectMap: Record<string, number> = {};
   currentMonthLogs.forEach((l) => {
     const mins = l.durationHours * 60 + l.durationMinutes;
@@ -459,7 +498,64 @@ export default function EngineeringHub() {
 
   return (
     <div className="min-h-screen bg-[#090b10] text-[#c9d1d9] font-mono selection:bg-[#238636] selection:text-white p-4 md:p-8">
-      {/* 기상 특보 스트립 (우산 지참 경보) */}
+      {/* 0. 통합 관리자 로그인 모달 */}
+      {showLoginModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm border border-[#30363d] bg-[#161b22] rounded-lg p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#30363d] pb-3 mb-4">
+              <span className="text-sm font-bold text-white flex items-center gap-2">
+                <span>🔐 ROOT_ACCESS_AUTH</span>
+              </span>
+              <button
+                onClick={() => {
+                  playClickSound();
+                  setShowLoginModal(false);
+                  setAuthError(false);
+                }}
+                className="text-[#8b949e] hover:text-white text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleLoginSubmit} className="space-y-3">
+              <div>
+                <label className="text-[10px] text-[#8b949e] uppercase block mb-1">OPERATOR ID</label>
+                <input
+                  type="text"
+                  placeholder="admin"
+                  value={adminId}
+                  onChange={(e) => setAdminId(e.target.value)}
+                  className="w-full bg-[#0d1117] border border-[#30363d] text-xs px-3 py-2 rounded text-white focus:outline-none focus:border-[#58a6ff]"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-[#8b949e] uppercase block mb-1">PASSWORD</label>
+                <input
+                  type="password"
+                  placeholder="Password"
+                  value={adminPw}
+                  onChange={(e) => setAdminPw(e.target.value)}
+                  className="w-full bg-[#0d1117] border border-[#30363d] text-xs px-3 py-2 rounded text-white focus:outline-none focus:border-[#58a6ff]"
+                />
+              </div>
+
+              {authError && (
+                <div className="text-[11px] text-[#f85149]">❌ 인증 실패: 아이디 또는 비밀번호가 올바르지 않습니다.</div>
+              )}
+
+              <button
+                type="submit"
+                className="w-full bg-[#238636] hover:bg-[#2ea043] text-white text-xs py-2 rounded font-bold transition mt-2"
+              >
+                LOGIN
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 기상 특보 스트립 */}
       {weatherAlert.active && (
         <div className="mb-4 border border-rose-500/60 bg-rose-950/40 text-rose-300 px-4 py-2.5 rounded-lg flex items-center justify-between text-xs animate-pulse shadow-lg">
           <div className="flex items-center gap-2">
@@ -488,6 +584,26 @@ export default function EngineeringHub() {
           >
             SFX: {soundEnabled ? 'ON' : 'MUTE'}
           </button>
+
+          {/* 통합 로그인/로그아웃 버튼 */}
+          {isAuthenticated ? (
+            <button
+              onClick={handleLogout}
+              className="text-[10px] px-2 py-0.5 rounded border border-rose-500/50 bg-rose-950/30 text-rose-300 hover:bg-rose-900/50 transition font-bold"
+            >
+              LOGOUT [ROOT]
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                playClickSound();
+                setShowLoginModal(true);
+              }}
+              className="text-[10px] px-2 py-0.5 rounded border border-[#58a6ff]/50 bg-[#1f6feb]/20 text-[#58a6ff] hover:bg-[#1f6feb]/40 transition font-bold"
+            >
+              ADMIN LOGIN
+            </button>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-4 text-xs text-[#8b949e]">
@@ -531,7 +647,7 @@ export default function EngineeringHub() {
         </div>
       </header>
 
-      {/* 2. 빠른 실행 서브시스템 링크 (통합 런처: CBT + 전주대 날씨 + 학습 게시판) */}
+      {/* 2. 빠른 실행 서브시스템 링크 */}
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         <Link
           href="/cbt"
@@ -563,7 +679,6 @@ export default function EngineeringHub() {
           <div className="text-xs text-[#8b949e] mt-1">캠퍼스(효자동) 실시간 기상 관측 및 단기 예보</div>
         </Link>
 
-        {/* ENGINE 03: 학습 보드 바로가기 카드 */}
         <div className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg shadow flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-[#8b949e]">ENGINE 03</span>
@@ -578,28 +693,32 @@ export default function EngineeringHub() {
         </div>
       </section>
 
-      {/* 메인 2열 그리드: 일정/달력/학습게시판 vs 프로필/자소서/커플위젯 */}
+      {/* 메인 2열 그리드 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* [좌측 7열]: 올해/이달 목표 + 달력 + 학습 시간 통계 및 로그 게시판 */}
         <section className="lg:col-span-7 space-y-6">
-          {/* 달력 상단: 올해 목표 & 이달의 목표 편집 보드 */}
+          {/* 달력 상단: 목표 보드 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-4 shadow-lg">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-2 mb-3">
               <span className="text-xs font-bold text-[#58a6ff] uppercase tracking-wider flex items-center gap-1.5">
                 <span>🎯 MISSION_OBJECTIVES</span>
               </span>
-              <button
-                onClick={() => {
-                  if (isEditingGoals) handleSaveGoals();
-                  else {
-                    playClickSound();
-                    setIsEditingGoals(true);
-                  }
-                }}
-                className="text-[10px] px-2 py-0.5 rounded border border-[#58a6ff] text-[#58a6ff] hover:bg-[#58a6ff]/20 font-bold transition"
-              >
-                {isEditingGoals ? 'SAVE_GOALS' : 'EDIT_GOALS'}
-              </button>
+              {isAuthenticated ? (
+                <button
+                  onClick={() => {
+                    if (isEditingGoals) handleSaveGoals();
+                    else {
+                      playClickSound();
+                      setIsEditingGoals(true);
+                    }
+                  }}
+                  className="text-[10px] px-2 py-0.5 rounded border border-[#58a6ff] text-[#58a6ff] hover:bg-[#58a6ff]/20 font-bold transition"
+                >
+                  {isEditingGoals ? 'SAVE_GOALS' : 'EDIT_GOALS'}
+                </button>
+              ) : (
+                <span className="text-[10px] text-[#8b949e]">🔒 READ_ONLY</span>
+              )}
             </div>
 
             <div className="space-y-2.5 text-xs">
@@ -607,7 +726,7 @@ export default function EngineeringHub() {
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300 border border-blue-500/40 shrink-0">
                   2026_YEAR
                 </span>
-                {isEditingGoals ? (
+                {isEditingGoals && isAuthenticated ? (
                   <input
                     type="text"
                     value={yearlyGoal}
@@ -623,7 +742,7 @@ export default function EngineeringHub() {
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300 border border-emerald-500/40 shrink-0">
                   THIS_MONTH
                 </span>
-                {isEditingGoals ? (
+                {isEditingGoals && isAuthenticated ? (
                   <input
                     type="text"
                     value={monthlyGoal}
@@ -723,49 +842,100 @@ export default function EngineeringHub() {
               })}
             </div>
 
-            {/* 일정 추가 폼 */}
-            <form onSubmit={handleAddSchedule} className="pt-3 border-t border-[#30363d] flex flex-col sm:flex-row gap-2 items-center">
-              <input
-                type="date"
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-                className="bg-[#0d1117] border border-[#30363d] text-xs px-2.5 py-1.5 rounded text-white focus:outline-none focus:border-[#58a6ff]"
-              />
-              <select
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value as any)}
-                className="bg-[#0d1117] border border-[#30363d] text-xs px-2.5 py-1.5 rounded text-white focus:outline-none"
-              >
-                <option value="DEV">DEV</option>
-                <option value="ACADEMIC">ACADEMIC</option>
-                <option value="PERSONAL">PERSONAL</option>
-              </select>
-              <input
-                type="text"
-                placeholder="새로운 태스크 또는 일정 입력..."
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                className="flex-1 bg-[#0d1117] border border-[#30363d] text-xs px-3 py-1.5 rounded text-white focus:outline-none focus:border-[#58a6ff] w-full"
-              />
-              <label className="flex items-center gap-1.5 text-xs text-[#8b949e] whitespace-nowrap cursor-pointer">
+            {/* 일정 추가 폼 (인증 제어) */}
+            {isAuthenticated ? (
+              <form onSubmit={handleAddSchedule} className="pt-3 border-t border-[#30363d] flex flex-col sm:flex-row gap-2 items-center">
                 <input
-                  type="checkbox"
-                  checked={newIsDday}
-                  onChange={(e) => setNewIsDday(e.target.checked)}
-                  className="rounded border-[#30363d] text-[#58a6ff]"
+                  type="date"
+                  value={newDate}
+                  onChange={(e) => setNewDate(e.target.value)}
+                  className="bg-[#0d1117] border border-[#30363d] text-xs px-2.5 py-1.5 rounded text-white focus:outline-none focus:border-[#58a6ff]"
                 />
-                <span>★D-Day</span>
-              </label>
-              <button
-                type="submit"
-                className="bg-[#238636] hover:bg-[#2ea043] text-white text-xs px-4 py-1.5 rounded font-bold transition whitespace-nowrap w-full sm:w-auto"
-              >
-                + ADD_TASK
-              </button>
-            </form>
+                <select
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value as any)}
+                  className="bg-[#0d1117] border border-[#30363d] text-xs px-2.5 py-1.5 rounded text-white focus:outline-none"
+                >
+                  <option value="DEV">DEV</option>
+                  <option value="ACADEMIC">ACADEMIC</option>
+                  <option value="PERSONAL">PERSONAL</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="새로운 태스크 또는 일정 입력..."
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  className="flex-1 bg-[#0d1117] border border-[#30363d] text-xs px-3 py-1.5 rounded text-white focus:outline-none focus:border-[#58a6ff] w-full"
+                />
+                <label className="flex items-center gap-1.5 text-xs text-[#8b949e] whitespace-nowrap cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newIsDday}
+                    onChange={(e) => setNewIsDday(e.target.checked)}
+                    className="rounded border-[#30363d] text-[#58a6ff]"
+                  />
+                  <span>★D-Day</span>
+                </label>
+                <button
+                  type="submit"
+                  className="bg-[#238636] hover:bg-[#2ea043] text-white text-xs px-4 py-1.5 rounded font-bold transition whitespace-nowrap w-full sm:w-auto"
+                >
+                  + ADD_TASK
+                </button>
+              </form>
+            ) : (
+              <div className="pt-3 border-t border-[#30363d] text-center text-xs text-[#8b949e]">
+                🔒 일정 등록 및 수정은 관리자 로그인 후 가능합니다.
+              </div>
+            )}
           </div>
 
-          {/* 달력 밑쪽: 이번 달 학습 누적 통계 & 미니 바 차트 */}
+          {/* 등록된 일정 큐 리스트 */}
+          <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-[#8b949e] uppercase">SCHEDULED_EVENTS_QUEUE</span>
+              <span className="text-[10px] text-[#238636]">STORAGE: SYNCED</span>
+            </div>
+            <div className="space-y-2">
+              {schedules.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between p-2.5 rounded bg-[#0d1117] border border-[#21262d] text-xs"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-[#58a6ff] text-[11px]">{s.date}</span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        s.category === 'DEV'
+                          ? 'bg-[#238636]/20 text-[#7ee787]'
+                          : s.category === 'ACADEMIC'
+                          ? 'bg-[#1f6feb]/20 text-[#58a6ff]'
+                          : 'bg-[#a371f7]/20 text-[#d2a8ff]'
+                      }`}
+                    >
+                      {s.category}
+                    </span>
+                    <span className="text-slate-200">{s.title}</span>
+                    {s.isDday && isMounted && (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
+                        {calculateDday(s.date)}
+                      </span>
+                    )}
+                  </div>
+                  {isAuthenticated && (
+                    <button
+                      onClick={() => handleDeleteSchedule(s.id)}
+                      className="text-[#8b949e] hover:text-[#f85149] text-xs px-1"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 이번 달 학습 누적 통계 & 미니 바 차트 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-4 shadow-lg">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-2 mb-3">
               <div className="flex items-center gap-2">
@@ -777,7 +947,6 @@ export default function EngineeringHub() {
               </span>
             </div>
 
-            {/* 과목별 누적 분포 미니 바 차트 */}
             {currentMonthTotalMinutes === 0 ? (
               <div className="text-[11px] text-[#8b949e] py-1 text-center">이번 달 등록된 공부 시간이 없습니다.</div>
             ) : (
@@ -813,7 +982,7 @@ export default function EngineeringHub() {
             )}
           </div>
 
-          {/* 학습 로그 게시판 (Study Dev Logs) */}
+          {/* 학습 로그 게시판 (인증 제어) */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-3 mb-4">
               <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -825,62 +994,66 @@ export default function EngineeringHub() {
               <span className="text-[10px] text-[#8b949e]">날짜별 학습 기록</span>
             </div>
 
-            {/* 학습 기록 주입 폼 */}
-            <form onSubmit={handleAddStudyLog} className="bg-[#0d1117] p-3 rounded-lg border border-[#21262d] mb-4 space-y-2 text-xs">
-              <div className="flex flex-wrap gap-2 items-center">
-                <input
-                  type="date"
-                  value={logDate}
-                  onChange={(e) => setLogDate(e.target.value)}
-                  className="bg-[#161b22] border border-[#30363d] px-2 py-1 rounded text-white text-xs focus:outline-none"
-                />
-                <input
-                  type="text"
-                  value={logSubject}
-                  onChange={(e) => setLogSubject(e.target.value)}
-                  placeholder="과목 / 분야"
-                  className="bg-[#161b22] border border-[#30363d] px-2 py-1 rounded text-white text-xs w-32 focus:outline-none focus:border-[#a371f7]"
-                />
-                <div className="flex items-center gap-1 text-[#8b949e]">
+            {isAuthenticated ? (
+              <form onSubmit={handleAddStudyLog} className="bg-[#0d1117] p-3 rounded-lg border border-[#21262d] mb-4 space-y-2 text-xs">
+                <div className="flex flex-wrap gap-2 items-center">
                   <input
-                    type="number"
-                    min="0"
-                    max="23"
-                    value={logHours}
-                    onChange={(e) => setLogHours(Number(e.target.value))}
-                    className="w-12 bg-[#161b22] border border-[#30363d] px-1.5 py-1 rounded text-white text-xs text-center focus:outline-none"
+                    type="date"
+                    value={logDate}
+                    onChange={(e) => setLogDate(e.target.value)}
+                    className="bg-[#161b22] border border-[#30363d] px-2 py-1 rounded text-white text-xs focus:outline-none"
                   />
-                  <span>시간</span>
                   <input
-                    type="number"
-                    min="0"
-                    max="59"
-                    value={logMinutes}
-                    onChange={(e) => setLogMinutes(Number(e.target.value))}
-                    className="w-12 bg-[#161b22] border border-[#30363d] px-1.5 py-1 rounded text-white text-xs text-center focus:outline-none"
+                    type="text"
+                    value={logSubject}
+                    onChange={(e) => setLogSubject(e.target.value)}
+                    placeholder="과목 / 분야"
+                    className="bg-[#161b22] border border-[#30363d] px-2 py-1 rounded text-white text-xs w-32 focus:outline-none focus:border-[#a371f7]"
                   />
-                  <span>분</span>
+                  <div className="flex items-center gap-1 text-[#8b949e]">
+                    <input
+                      type="number"
+                      min="0"
+                      max="23"
+                      value={logHours}
+                      onChange={(e) => setLogHours(Number(e.target.value))}
+                      className="w-12 bg-[#161b22] border border-[#30363d] px-1.5 py-1 rounded text-white text-xs text-center focus:outline-none"
+                    />
+                    <span>시간</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={logMinutes}
+                      onChange={(e) => setLogMinutes(Number(e.target.value))}
+                      className="w-12 bg-[#161b22] border border-[#30363d] px-1.5 py-1 rounded text-white text-xs text-center focus:outline-none"
+                    />
+                    <span>분</span>
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={logSummary}
-                  onChange={(e) => setLogSummary(e.target.value)}
-                  placeholder="학습 내용 상세 (예: 기출문제 풀이, 논문 리딩, 알고리즘 구현 등)..."
-                  className="flex-1 bg-[#161b22] border border-[#30363d] px-2.5 py-1 rounded text-white text-xs focus:outline-none focus:border-[#a371f7]"
-                />
-                <button
-                  type="submit"
-                  className="bg-[#6e40c9] hover:bg-[#8957e5] text-white px-3 py-1 rounded font-bold transition text-xs whitespace-nowrap"
-                >
-                  + 기록 등록
-                </button>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={logSummary}
+                    onChange={(e) => setLogSummary(e.target.value)}
+                    placeholder="학습 내용 상세 (예: 기출문제 풀이, 알고리즘 구현 등)..."
+                    className="flex-1 bg-[#161b22] border border-[#30363d] px-2.5 py-1 rounded text-white text-xs focus:outline-none focus:border-[#a371f7]"
+                  />
+                  <button
+                    type="submit"
+                    className="bg-[#6e40c9] hover:bg-[#8957e5] text-white px-3 py-1 rounded font-bold transition text-xs whitespace-nowrap"
+                  >
+                    + 기록 등록
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="bg-[#0d1117] p-2.5 rounded border border-[#21262d] mb-4 text-center text-xs text-[#8b949e]">
+                🔒 학습 기록 등록 및 삭제는 관리자 로그인 후 이용 가능합니다.
               </div>
-            </form>
+            )}
 
-            {/* 학습 기록 게시물 목록 */}
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
               {studyLogs.length === 0 ? (
                 <div className="text-[11px] text-[#8b949e] py-4 text-center">등록된 학습 게시물이 없습니다.</div>
@@ -898,12 +1071,14 @@ export default function EngineeringHub() {
                       <span className="text-white font-bold shrink-0">{log.durationHours}h {log.durationMinutes}m</span>
                       <span className="text-slate-300 truncate max-w-[280px]">{log.summary}</span>
                     </div>
-                    <button
-                      onClick={() => handleDeleteStudyLog(log.id)}
-                      className="text-[#8b949e] hover:text-[#f85149] text-xs px-1 self-end sm:self-auto"
-                    >
-                      삭제
-                    </button>
+                    {isAuthenticated && (
+                      <button
+                        onClick={() => handleDeleteStudyLog(log.id)}
+                        className="text-[#8b949e] hover:text-[#f85149] text-xs px-1 self-end sm:self-auto"
+                      >
+                        삭제
+                      </button>
+                    )}
                   </div>
                 ))
               )}
@@ -911,9 +1086,9 @@ export default function EngineeringHub() {
           </div>
         </section>
 
-        {/* [우측 5열]: 크로노 모듈 + 대표소개/자소서 + 커플 텔레메트리 마일스톤 */}
+        {/* [우측 5열]: 크로노 모듈 + 프로필/자소서 + 커플 텔레메트리 */}
         <section className="lg:col-span-5 space-y-6">
-          {/* 다기능 크로노 모듈 (타이머 & 스톱워치) */}
+          {/* 다기능 크로노 모듈 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-2 mb-3">
               <div className="flex gap-1">
@@ -1061,7 +1236,7 @@ export default function EngineeringHub() {
                   </button>
                 )}
                 <span className="text-[10px] px-2 py-0.5 rounded bg-[#238636]/20 text-[#7ee787] border border-[#238636]/40">
-                  ACTIVE CHIEF
+                  {isAuthenticated ? 'ROOT AUTHORIZED' : 'VISITOR MODE'}
                 </span>
               </div>
             </div>
@@ -1069,7 +1244,7 @@ export default function EngineeringHub() {
             <div className="space-y-3 text-xs mb-5">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-[#21262d] pb-2 gap-1">
                 <span className="text-[#8b949e]">OPERATOR:</span>
-                {isEditingProfile ? (
+                {isEditingProfile && isAuthenticated ? (
                   <input
                     type="text"
                     value={profile.name}
@@ -1083,7 +1258,7 @@ export default function EngineeringHub() {
 
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-[#21262d] pb-2 gap-1">
                 <span className="text-[#8b949e]">AFFILIATION:</span>
-                {isEditingProfile ? (
+                {isEditingProfile && isAuthenticated ? (
                   <input
                     type="text"
                     value={profile.affiliation}
@@ -1097,7 +1272,7 @@ export default function EngineeringHub() {
 
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-[#21262d] pb-2 gap-1">
                 <span className="text-[#8b949e]">SPECIALIZATION:</span>
-                {isEditingProfile ? (
+                {isEditingProfile && isAuthenticated ? (
                   <input
                     type="text"
                     value={profile.specialization}
@@ -1111,7 +1286,7 @@ export default function EngineeringHub() {
 
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-[#21262d] pb-2 gap-1">
                 <span className="text-[#8b949e]">CORE_STACK:</span>
-                {isEditingProfile ? (
+                {isEditingProfile && isAuthenticated ? (
                   <input
                     type="text"
                     value={profile.coreStack}
@@ -1131,55 +1306,23 @@ export default function EngineeringHub() {
                   <span>🔒 SECURE_CAREER_VAULT</span>
                   {isAuthenticated && <span className="text-[10px] text-[#7ee787] font-bold">[UNLOCKED]</span>}
                 </div>
-                {isAuthenticated && (
-                  <button
-                    onClick={() => {
-                      playClickSound();
-                      setIsAuthenticated(false);
-                      setIsEditingProfile(false);
-                    }}
-                    className="text-[10px] text-[#f85149] hover:underline"
-                  >
-                    LOCK_NOW
-                  </button>
-                )}
               </div>
 
               {!isAuthenticated ? (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    playClickSound();
-                    if (passcode === '1218') {
-                      setIsAuthenticated(true);
-                      setAuthError(false);
-                      setPasscode('');
-                    } else {
-                      setAuthError(true);
-                    }
-                  }}
-                  className="space-y-3"
-                >
+                <div className="space-y-3">
                   <p className="text-[11px] text-[#8b949e] leading-relaxed">
-                    대표 전용 보안 저장소입니다. 패스코드를 입력해 자소서를 잠금 해제하십시오.
+                    본 구역은 대표 전용 보안 저장소입니다. 상단 [ADMIN LOGIN] 버튼을 통해 로그인해야 열람 및 수정이 가능합니다.
                   </p>
-                  <div className="flex gap-2">
-                    <input
-                      type="password"
-                      placeholder="Passcode (1218)"
-                      value={passcode}
-                      onChange={(e) => setPasscode(e.target.value)}
-                      className="flex-1 bg-[#161b22] border border-[#30363d] text-xs px-3 py-1.5 rounded text-white focus:outline-none focus:border-[#58a6ff]"
-                    />
-                    <button
-                      type="submit"
-                      className="bg-[#21262d] hover:bg-[#30363d] text-white text-xs px-3 py-1.5 rounded border border-[#30363d] font-bold"
-                    >
-                      AUTH
-                    </button>
-                  </div>
-                  {authError && <div className="text-[11px] text-[#f85149]">❌ 인증 실패: 패스코드가 일치하지 않습니다.</div>}
-                </form>
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      setShowLoginModal(true);
+                    }}
+                    className="w-full bg-[#21262d] hover:bg-[#30363d] text-white text-xs py-2 rounded border border-[#30363d] font-bold transition"
+                  >
+                    관리자 로그인 창 열기
+                  </button>
+                </div>
               ) : (
                 <div className="space-y-3">
                   <div className="text-[10px] text-[#8b949e]">* 상시 수정 및 영구 보존 모드입니다.</div>
@@ -1207,7 +1350,7 @@ export default function EngineeringHub() {
             </div>
           </div>
 
-          {/* 대문 오른쪽 아래: 커플 텔레메트리 & 마일스톤 자동 알리미 */}
+          {/* 대문 오른쪽 아래: 커플 텔레메트리 & 마일스톤 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-2 mb-3">
               <span className="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -1218,14 +1361,12 @@ export default function EngineeringHub() {
               </span>
             </div>
 
-            {/* 현재 일수 (단백한 공대 스타일) */}
             <div className="mb-4">
               <div className="text-3xl font-extrabold font-mono text-white">
                 Day <span className="text-rose-400">{milestones ? milestones.currentDays : '---'}</span>
               </div>
             </div>
 
-            {/* 다가오는 4대 마일스톤 자동 알리미 */}
             <div className="space-y-2 border-t border-[#21262d] pt-3 text-xs">
               <div className="text-[10px] font-bold text-[#8b949e] uppercase">UPCOMING_MILESTONES</div>
 
