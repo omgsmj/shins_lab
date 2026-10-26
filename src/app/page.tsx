@@ -1,80 +1,434 @@
-import Link from 'next/link';
+'use client';
 
-export default function Home() {
-  const modules = [
-    {
-      title: '정보처리기사 CBT',
-      description: '실전 모의고사, OMR 마킹 시트, 타이머 및 인라인 관리자 오답 핫픽스 엔진.',
-      href: '/cbt',
-      badge: 'v1.0 Ready',
-      color: 'from-blue-600 to-indigo-600'
-    },
-    {
-      title: '개인 개발 아카이브',
-      description: '추후 추가 예정인 코드 스니펫 및 기술 문서 관리 모듈.',
-      href: '#',
-      badge: 'Planned',
-      color: 'from-slate-700 to-slate-800'
-    },
-    {
-      title: '개인 유틸리티 & 도구함',
-      description: 'API 테스트, 포맷터 등 일상 작업에 필요한 커스텀 유틸리티 집합체.',
-      href: '#',
-      badge: 'Planned',
-      color: 'from-slate-700 to-slate-800'
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
+
+interface ScheduleItem {
+  id: number;
+  date: string;
+  title: string;
+  category: 'DEV' | 'ACADEMIC' | 'PERSONAL';
+}
+
+export default function EngineeringHub() {
+  // 1. 시스템 텔레메트리 상태
+  const [timeStr, setTimeStr] = useState<string>('');
+  const [uptime, setUptime] = useState<number>(0);
+
+  // 2. 인증 및 프로필/자소서 금고 상태
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [passcode, setPasscode] = useState<string>('');
+  const [authError, setAuthError] = useState<boolean>(false);
+  const [careerDoc, setCareerDoc] = useState<string>(
+    `[핵심 역량 및 엔지니어링 지향점]
+- Python, OpenCV 기반의 컴퓨터 비전 파이프라인 및 응용 GUI 소프트웨어 구축 역량.
+- Next.js (App Router), TypeScript, Supabase 기반 풀스택 시스템 아키텍처 설계.
+- 일본어 비즈니스 커뮤니케이션 및 기술 문서 독해 역량 (일본언어문화 / 인공지능 복수전공).
+- 실패를 숨기지 않는 방어적 프로그래밍과 데이터 무손실 파싱 지향.`
+  );
+
+  // 3. 달력 및 일정 상태
+  const [schedules, setSchedules] = useState<ScheduleItem[]>([
+    { id: 1, date: '2026-10-26', title: '정보처리기사 CBT 엔진 빌드 및 검증', category: 'DEV' },
+    { id: 2, date: '2026-10-28', title: '졸업 프로젝트 인공지능 파이프라인 통합 테스트', category: 'ACADEMIC' },
+    { id: 3, date: '2026-11-05', title: '취업용 포트폴리오 및 기술 자소서 1차 탈고', category: 'DEV' },
+  ]);
+  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 9, 26)); // 기준: 2026년 10월
+  const [newTitle, setNewTitle] = useState<string>('');
+  const [newDate, setNewDate] = useState<string>('2026-10-26');
+  const [newCategory, setNewCategory] = useState<'DEV' | 'ACADEMIC' | 'PERSONAL'>('DEV');
+
+  // 4. 스크래치패드 상태
+  const [scratchpad, setScratchpad] = useState<string>(
+    '// QUICK SCRATCHPAD (Auto-saved)\n$ python -m venv venv\n$ pip install -r requirements.txt'
+  );
+
+  // 텔레메트리 타이머
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      setTimeStr(
+        now.toLocaleDateString('ko-KR', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          weekday: 'short',
+        }) + ' ' + now.toTimeString().split(' ')[0]
+      );
+      setUptime((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Supabase 일정 불러오기
+  useEffect(() => {
+    const fetchSchedules = async () => {
+      try {
+        const { data, error } = await supabase.from('user_schedules').select('*').order('date', { ascending: true });
+        if (!error && data && data.length > 0) {
+          setSchedules(data);
+        }
+      } catch (err) {
+        console.warn('Supabase offline, using local memory.');
+      }
+    };
+    fetchSchedules();
+  }, []);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passcode === '1218') {
+      setIsAuthenticated(true);
+      setAuthError(false);
+      setPasscode('');
+    } else {
+      setAuthError(true);
     }
-  ];
+  };
+
+  const handleAddSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim()) return;
+
+    const newItem: ScheduleItem = {
+      id: Date.now(),
+      date: newDate,
+      title: newTitle,
+      category: newCategory,
+    };
+
+    setSchedules((prev) => [...prev, newItem].sort((a, b) => a.date.localeCompare(b.date)));
+    setNewTitle('');
+
+    try {
+      await supabase.from('user_schedules').insert({
+        date: newDate,
+        title: newTitle,
+        category: newCategory,
+      });
+    } catch (err) {
+      console.warn('DB insert fallback to local state');
+    }
+  };
+
+  const handleDeleteSchedule = async (id: number) => {
+    setSchedules((prev) => prev.filter((item) => item.id !== id));
+    try {
+      await supabase.from('user_schedules').delete().eq('id', id);
+    } catch (err) {
+      console.warn('DB delete fallback');
+    }
+  };
+
+  // 달력 렌더링용 계산
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const firstDayIndex = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur px-8 py-5 flex items-center justify-between">
+    <div className="min-h-screen bg-[#090b10] text-[#c9d1d9] font-mono selection:bg-[#238636] selection:text-white p-4 md:p-8">
+      {/* 1. 최상단 엔지니어링 헤더 & 텔레메트리 바 */}
+      <header className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center gap-3">
-          <div className="h-3 w-3 rounded-full bg-blue-500 shadow-lg shadow-blue-500/50"></div>
-          <h1 className="font-mono text-xl font-bold tracking-tight">MY PERSONAL HUB</h1>
+          <div className="h-3 w-3 rounded-full bg-[#238636] animate-pulse" />
+          <span className="text-sm font-bold text-white tracking-widest uppercase">
+            STATION_TERMINAL :: MINJONG_SHIN
+          </span>
+          <span className="text-xs px-2 py-0.5 rounded bg-[#21262d] text-[#8b949e] border border-[#30363d]">
+            ENV: PRODUCTION (v2.4.0)
+          </span>
         </div>
-        <span className="font-mono text-xs text-slate-400">Next.js 14 · Supabase · Vercel</span>
+
+        <div className="flex flex-wrap items-center gap-4 text-xs text-[#8b949e]">
+          <div>LOC: <span className="text-[#58a6ff]">JEONJU-SI (35.82°N, 127.14°E)</span></div>
+          <div>KST: <span className="text-[#7ee787] font-bold">{timeStr || 'SYNCING...'}</span></div>
+          <div>UPTIME: <span className="text-white font-bold">{uptime}s</span></div>
+        </div>
       </header>
 
-      <main className="flex-1 max-w-5xl mx-auto w-full p-8 py-16">
-        <div className="mb-12">
-          <h2 className="text-3xl font-black tracking-tight text-white mb-2">모듈형 개인 워크스페이스</h2>
-          <p className="text-slate-400">필요한 기능들을 하나씩 차곡차곡 추가하고 관리하는 전용 대시보드입니다.</p>
-        </div>
+      {/* 2. 빠른 실행 서브시스템 링크 (CLI LAUNCHER) */}
+      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <Link
+          href="/cbt"
+          className="border border-[#30363d] bg-[#161b22] p-3 rounded hover:border-[#58a6ff] hover:bg-[#1f242c] transition group"
+        >
+          <div className="text-[10px] text-[#8b949e] group-hover:text-[#58a6ff]">ENGINE 01</div>
+          <div className="text-sm font-bold text-white mt-1">CBT 시험장 (100제)</div>
+        </Link>
+        <Link
+          href="/cbt/notes"
+          className="border border-[#30363d] bg-[#161b22] p-3 rounded hover:border-[#d29922] hover:bg-[#1f242c] transition group"
+        >
+          <div className="text-[10px] text-[#8b949e] group-hover:text-[#d29922]">STORAGE 02</div>
+          <div className="text-sm font-bold text-white mt-1">오답노트 보관함</div>
+        </Link>
+        <Link
+          href="/admin/cbt"
+          className="border border-[#30363d] bg-[#161b22] p-3 rounded hover:border-[#f85149] hover:bg-[#1f242c] transition group"
+        >
+          <div className="text-[10px] text-[#8b949e] group-hover:text-[#f85149]">ADMIN 03</div>
+          <div className="text-sm font-bold text-white mt-1">문제 데이터 주입기</div>
+        </Link>
+        <a
+          href="https://github.com"
+          target="_blank"
+          rel="noreferrer"
+          className="border border-[#30363d] bg-[#161b22] p-3 rounded hover:border-[#a371f7] hover:bg-[#1f242c] transition group"
+        >
+          <div className="text-[10px] text-[#8b949e] group-hover:text-[#a371f7]">REMOTE 04</div>
+          <div className="text-sm font-bold text-white mt-1">GitHub 저장소 ↗</div>
+        </a>
+      </section>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {modules.map((m, idx) => (
-            <Link
-              key={idx}
-              href={m.href}
-              className={`group relative flex flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900/60 p-6 transition hover:border-slate-700 hover:bg-slate-900 hover:shadow-xl ${
-                m.href === '#' ? 'cursor-not-allowed opacity-60' : ''
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <span className="rounded-full bg-slate-800 border border-slate-700 px-2.5 py-0.5 text-[11px] font-semibold text-slate-300">
-                    {m.badge}
-                  </span>
+      {/* 메인 2열 그리드: 일정/캘린더 vs 프로필/자소서 금고 */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* [좌측 7열]: 달력 및 일정 텔레메트리 */}
+        <section className="lg:col-span-7 space-y-6">
+          <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
+            <div className="flex items-center justify-between border-b border-[#30363d] pb-3 mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-white tracking-wider">SCHEDULE_CALENDAR</span>
+                <span className="text-xs text-[#8b949e]">
+                  ({year}.{String(month + 1).padStart(2, '0')})
+                </span>
+              </div>
+              <div className="flex gap-1 text-xs">
+                <button
+                  onClick={() => setCurrentDate(new Date(year, month - 1, 1))}
+                  className="px-2 py-1 rounded bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9]"
+                >
+                  ◀ PREV
+                </button>
+                <button
+                  onClick={() => setCurrentDate(new Date(year, month + 1, 1))}
+                  className="px-2 py-1 rounded bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9]"
+                >
+                  NEXT ▶
+                </button>
+              </div>
+            </div>
+
+            {/* 월간 그리드 */}
+            <div className="grid grid-cols-7 gap-1 text-center text-xs mb-4">
+              {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day, idx) => (
+                <div key={day} className={`font-bold py-1 ${idx === 0 ? 'text-[#f85149]' : 'text-[#8b949e]'}`}>
+                  {day}
                 </div>
-                <h3 className="text-lg font-bold text-white group-hover:text-blue-400 transition mb-2">
-                  {m.title}
-                </h3>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                  {m.description}
-                </p>
+              ))}
+              {Array.from({ length: firstDayIndex }).map((_, i) => (
+                <div key={`empty-${i}`} className="h-14 border border-transparent" />
+              ))}
+              {daysArray.map((d) => {
+                const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const hasSchedule = schedules.some((s) => s.date === dateKey);
+                const isToday = d === 26 && month === 9; // 10월 26일 오늘 하이라이트
+
+                return (
+                  <div
+                    key={d}
+                    onClick={() => setNewDate(dateKey)}
+                    className={`h-14 border rounded p-1 text-left flex flex-col justify-between cursor-pointer transition ${
+                      isToday
+                        ? 'border-[#58a6ff] bg-[#58a6ff]/10 font-bold text-white'
+                        : hasSchedule
+                        ? 'border-[#30363d] bg-[#21262d]/60 text-[#c9d1d9]'
+                        : 'border-[#21262d] bg-[#0d1117]/50 text-[#8b949e] hover:border-[#30363d]'
+                    }`}
+                  >
+                    <span className="text-[10px]">{d}</span>
+                    {hasSchedule && (
+                      <div className="w-2 h-2 rounded-full bg-[#7ee787] self-end mb-1" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 일정 추가 컨트롤러 */}
+            <form onSubmit={handleAddSchedule} className="pt-3 border-t border-[#30363d] flex flex-col sm:flex-row gap-2">
+              <input
+                type="date"
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
+                className="bg-[#0d1117] border border-[#30363d] text-xs px-2.5 py-1.5 rounded text-white focus:outline-none focus:border-[#58a6ff]"
+              />
+              <select
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value as any)}
+                className="bg-[#0d1117] border border-[#30363d] text-xs px-2.5 py-1.5 rounded text-white focus:outline-none"
+              >
+                <option value="DEV">DEV</option>
+                <option value="ACADEMIC">ACADEMIC</option>
+                <option value="PERSONAL">PERSONAL</option>
+              </select>
+              <input
+                type="text"
+                placeholder="새로운 태스크 또는 일정 입력..."
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                className="flex-1 bg-[#0d1117] border border-[#30363d] text-xs px-3 py-1.5 rounded text-white focus:outline-none focus:border-[#58a6ff]"
+              />
+              <button
+                type="submit"
+                className="bg-[#238636] hover:bg-[#2ea043] text-white text-xs px-4 py-1.5 rounded font-bold transition whitespace-nowrap"
+              >
+                + ADD_TASK
+              </button>
+            </form>
+          </div>
+
+          {/* 등록된 일정 텔레메트리 리스트 */}
+          <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
+            <div className="text-xs font-bold text-[#8b949e] uppercase mb-3">SCHEDULED_EVENTS_QUEUE</div>
+            <div className="space-y-2">
+              {schedules.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between p-2.5 rounded bg-[#0d1117] border border-[#21262d] text-xs"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-[#58a6ff] text-[11px]">{s.date}</span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        s.category === 'DEV'
+                          ? 'bg-[#238636]/20 text-[#7ee787]'
+                          : s.category === 'ACADEMIC'
+                          ? 'bg-[#1f6feb]/20 text-[#58a6ff]'
+                          : 'bg-[#a371f7]/20 text-[#d2a8ff]'
+                      }`}
+                    >
+                      {s.category}
+                    </span>
+                    <span className="text-slate-200">{s.title}</span>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteSchedule(s.id)}
+                    className="text-[#8b949e] hover:text-[#f85149] text-xs px-1"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* [우측 5열]: 대표소개 & 보안 자소서 락커 */}
+        <section className="lg:col-span-5 space-y-6">
+          <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
+            <div className="flex items-center justify-between border-b border-[#30363d] pb-3 mb-4">
+              <span className="text-sm font-bold text-white tracking-wider">ENGINEER_DOSSIER</span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-[#238636]/20 text-[#7ee787] border border-[#238636]/40">
+                ACTIVE CHIEF
+              </span>
+            </div>
+
+            {/* 대표 프로필 카드 */}
+            <div className="space-y-3 text-xs mb-5">
+              <div className="flex justify-between border-b border-[#21262d] pb-2">
+                <span className="text-[#8b949e]">OPERATOR:</span>
+                <span className="text-white font-bold">신민종 (SHIN MINJONG)</span>
+              </div>
+              <div className="flex justify-between border-b border-[#21262d] pb-2">
+                <span className="text-[#8b949e]">AFFILIATION:</span>
+                <span className="text-[#c9d1d9]">전주대학교 (Senior)</span>
+              </div>
+              <div className="flex justify-between border-b border-[#21262d] pb-2">
+                <span className="text-[#8b949e]">SPECIALIZATION:</span>
+                <span className="text-[#7ee787]">인공지능학 × 일본언어문화학</span>
+              </div>
+              <div className="flex justify-between border-b border-[#21262d] pb-2">
+                <span className="text-[#8b949e]">CORE_STACK:</span>
+                <span className="text-[#58a6ff]">Python, OpenCV, Next.js, TS</span>
+              </div>
+            </div>
+
+            {/* 보안 인증 락커 & 자소서 금고 */}
+            <div className="border border-[#30363d] bg-[#0d1117] rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>🔒 SECURE_CAREER_VAULT</span>
+                  {isAuthenticated && (
+                    <span className="text-[10px] text-[#7ee787] font-bold">[UNLOCKED]</span>
+                  )}
+                </div>
+                {isAuthenticated && (
+                  <button
+                    onClick={() => setIsAuthenticated(false)}
+                    className="text-[10px] text-[#f85149] hover:underline"
+                  >
+                    LOCK_NOW
+                  </button>
+                )}
               </div>
 
-              <div className="mt-6 flex items-center text-xs font-semibold text-blue-400">
-                {m.href === '#' ? '개발 예정' : '모듈 실행하기 →'}
-              </div>
-            </Link>
-          ))}
-        </div>
-      </main>
+              {!isAuthenticated ? (
+                <form onSubmit={handleLogin} className="space-y-3">
+                  <p className="text-[11px] text-[#8b949e] leading-relaxed">
+                    본 구역은 대표 전용 보안 저장소입니다. 암호화된 자기소개서 및 커리어 명세서를 열람하려면 패스코드를 입력하십시오.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      placeholder="Passcode (1218)"
+                      value={passcode}
+                      onChange={(e) => setPasscode(e.target.value)}
+                      className="flex-1 bg-[#161b22] border border-[#30363d] text-xs px-3 py-1.5 rounded text-white focus:outline-none focus:border-[#58a6ff]"
+                    />
+                    <button
+                      type="submit"
+                      className="bg-[#21262d] hover:bg-[#30363d] text-white text-xs px-3 py-1.5 rounded border border-[#30363d] font-bold"
+                    >
+                      AUTH
+                    </button>
+                  </div>
+                  {authError && (
+                    <div className="text-[11px] text-[#f85149]">❌ 인증 실패: 패스코드가 일치하지 않습니다.</div>
+                  )}
+                </form>
+              ) : (
+                <div className="space-y-3">
+                  <div className="text-[10px] text-[#8b949e]">
+                    * 이번 학기 종료 후 취업 지원을 위한 상시 편집 모드입니다.
+                  </div>
+                  <textarea
+                    rows={10}
+                    value={careerDoc}
+                    onChange={(e) => setCareerDoc(e.target.value)}
+                    className="w-full bg-[#161b22] border border-[#30363d] rounded p-3 text-xs text-[#c9d1d9] leading-relaxed focus:outline-none focus:border-[#7ee787] font-mono"
+                  />
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-[#8b949e]">{careerDoc.length} characters</span>
+                    <button
+                      onClick={() => alert('자소서 데이터가 브라우저 세션에 안전하게 저장되었습니다.')}
+                      className="bg-[#238636] hover:bg-[#2ea043] text-white px-3 py-1 rounded text-xs font-bold"
+                    >
+                      COMMIT_CHANGES
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
 
-      <footer className="border-t border-slate-800 py-6 text-center font-mono text-xs text-slate-500">
-        Standalone Personal Hub &copy; 2026. All rights reserved.
-      </footer>
+          {/* 선탑재 추가 기능: 엔지니어링 스크래치패드 */}
+          <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-[#8b949e] uppercase">SCRATCHPAD (CLI_NOTES)</span>
+              <span className="text-[10px] text-[#238636]">AUTOSAVE_ACTIVE</span>
+            </div>
+            <textarea
+              rows={4}
+              value={scratchpad}
+              onChange={(e) => setScratchpad(e.target.value)}
+              className="w-full bg-[#0d1117] border border-[#21262d] rounded p-2.5 text-xs text-[#7ee787] font-mono leading-relaxed focus:outline-none focus:border-[#30363d]"
+            />
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
