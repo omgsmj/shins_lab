@@ -27,6 +27,9 @@ const DEFAULT_SCHEDULES: ScheduleItem[] = [
 ];
 
 export default function EngineeringHub() {
+  // 클라이언트 마운트 가드 (SSR/Prerender 에러 방지)
+  const [isMounted, setIsMounted] = useState<boolean>(false);
+
   // 1. 시스템 텔레메트리 & 사운드
   const [timeStr, setTimeStr] = useState<string>('');
   const [uptime, setUptime] = useState<number>(0);
@@ -86,28 +89,38 @@ export default function EngineeringHub() {
     '// QUICK SCRATCHPAD (Auto-saved)\n$ python -m venv venv\n$ pip install -r requirements.txt'
   );
 
-  // Web Audio API 기계식 스위치 클릭음
+  // 클라이언트 마운트 감지
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Web Audio API 기계식 스위치 클릭음 (SSR 완전 방어)
   const playClickSound = () => {
-    if (!soundEnabled) return;
+    if (!soundEnabled || typeof window === 'undefined') return;
     try {
       if (!audioCtxRef.current) {
-        audioCtxRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+        const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtxRef.current = new AudioContextClass();
+        }
       }
       const ctx = audioCtxRef.current;
-      if (ctx.state === 'suspended') {
-        ctx.resume();
+      if (ctx) {
+        if (ctx.state === 'suspended') {
+          ctx.resume();
+        }
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(140, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.04);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.04);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.04);
       }
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(140, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.04);
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.04);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.04);
     } catch (e) {}
   };
 
@@ -151,7 +164,7 @@ export default function EngineeringHub() {
     return () => clearInterval(interval);
   }, [isFocusRunning, focusTimeLeft, focusMode]);
 
-  // 전주시 실시간 기상 관측 및 특보 감지 (Open-Meteo)
+  // 전주시 실시간 기상 관측 및 특보 감지
   useEffect(() => {
     const fetchJeonjuWeather = async () => {
       try {
@@ -200,6 +213,8 @@ export default function EngineeringHub() {
 
   // 로컬 스토리지 데이터 복원
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const savedProfile = localStorage.getItem('station_user_profile');
     if (savedProfile) {
       try { setProfile(JSON.parse(savedProfile)); } catch (e) {}
@@ -258,7 +273,9 @@ export default function EngineeringHub() {
 
     const updated = [...schedules, newItem].sort((a, b) => a.date.localeCompare(b.date));
     setSchedules(updated);
-    localStorage.setItem('station_schedules', JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('station_schedules', JSON.stringify(updated));
+    }
     setNewTitle('');
     setNewIsDday(false);
 
@@ -276,33 +293,40 @@ export default function EngineeringHub() {
     playClickSound();
     const updated = schedules.filter((item) => item.id !== id);
     setSchedules(updated);
-    localStorage.setItem('station_schedules', JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('station_schedules', JSON.stringify(updated));
+    }
     try {
       await supabase.from('user_schedules').delete().eq('id', id);
     } catch (err) {}
   };
 
-  // D-Day 계산 유틸리티
+  // D-Day 계산 유틸리티 (서버 Prerender 안전화)
   const calculateDday = (targetDateStr: string) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const target = new Date(targetDateStr);
-    target.setHours(0, 0, 0, 0);
-    const diffTime = target.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return 'D-DAY';
-    if (diffDays > 0) return `D-${diffDays}`;
-    return `D+${Math.abs(diffDays)}`;
+    if (!targetDateStr) return 'D-DAY';
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const parts = targetDateStr.split('-');
+      if (parts.length < 3) return 'D-DAY';
+      const target = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      target.setHours(0, 0, 0, 0);
+      const diffTime = target.getTime() - today.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays === 0) return 'D-DAY';
+      if (diffDays > 0) return `D-${diffDays}`;
+      return `D+${Math.abs(diffDays)}`;
+    } catch (e) {
+      return 'D-DAY';
+    }
   };
 
-  // 포커스 타이머 포맷
   const formatTimer = (sec: number) => {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  // 달력 렌더링용 계산
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const firstDayIndex = new Date(year, month, 1).getDay();
@@ -355,8 +379,7 @@ export default function EngineeringHub() {
               [🎯 D-DAY TARGETS ({ddayItems.length})]
             </span>
 
-            {/* 마우스 호버 시 노출되는 플로팅 팝업창 */}
-            {isDdayHovered && (
+            {isDdayHovered && isMounted && (
               <div className="absolute right-0 top-6 z-50 w-72 border border-[#30363d] bg-[#161b22] p-3 rounded-lg shadow-2xl space-y-2 backdrop-blur-md">
                 <div className="text-[10px] font-bold text-[#8b949e] border-b border-[#30363d] pb-1 uppercase">
                   ACTIVE_COUNTDOWN_QUEUE
@@ -646,7 +669,7 @@ export default function EngineeringHub() {
                       {s.category}
                     </span>
                     <span className="text-slate-200">{s.title}</span>
-                    {s.isDday && (
+                    {s.isDday && isMounted && (
                       <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
                         {calculateDday(s.date)}
                       </span>
