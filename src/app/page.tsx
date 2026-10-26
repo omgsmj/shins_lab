@@ -28,17 +28,10 @@ interface StudyBoardLog {
   summary: string;
 }
 
-const DEFAULT_SCHEDULES: ScheduleItem[] = [
-  { id: 1, date: '2026-10-26', title: '정보처리기사 CBT 엔진 빌드', category: 'DEV', isDday: false },
-  { id: 2, date: '2026-10-28', title: 'AI 파이프라인 통합 테스트', category: 'ACADEMIC', isDday: true },
-  { id: 3, date: '2026-11-05', title: '기술 자소서 1차 탈고', category: 'DEV', isDday: true },
-  { id: 4, date: '2026-12-18', title: '본인 생일', category: 'PERSONAL', isDday: true },
-];
-
 export default function EngineeringHub() {
   const [isMounted, setIsMounted] = useState<boolean>(false);
 
-  // 1. 관리자 통합 인증 상태
+  // 1. 관리자 통합 인증 상태 (sessionStorage 캐시 지원)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [adminId, setAdminId] = useState<string>('');
   const [adminPw, setAdminPw] = useState<string>('');
@@ -59,7 +52,7 @@ export default function EngineeringHub() {
     type: 'clear',
   });
 
-  // 4. 프로필 정보
+  // 4. 프로필 정보 (DB 동기화)
   const [profile, setProfile] = useState<UserProfile>({
     name: '신민종 (SHIN MINJONG)',
     affiliation: '전주대학교 (Senior)',
@@ -68,22 +61,16 @@ export default function EngineeringHub() {
   });
   const [isEditingProfile, setIsEditingProfile] = useState<boolean>(false);
 
-  // 5. 자소서 금고 내용
-  const [careerDoc, setCareerDoc] = useState<string>(
-    `[핵심 역량 및 엔지니어링 지향점]
-- Python, OpenCV 기반의 컴퓨터 비전 파이프라인 및 응용 GUI 소프트웨어 구축 역량.
-- Next.js (App Router), TypeScript, Supabase 기반 풀스택 시스템 아키텍처 설계.
-- 일본어 비즈니스 커뮤니케이션 및 기술 문서 독해 역량 (일본언어문화 / 인공지능 복수전공).
-- 실패를 숨기지 않는 방어적 프로그래밍과 데이터 무손실 파싱 지향.`
-  );
+  // 5. 자소서 금고 내용 (DB 동기화)
+  const [careerDoc, setCareerDoc] = useState<string>('');
 
-  // 6. 올해/이달의 목표
-  const [yearlyGoal, setYearlyGoal] = useState<string>('2026 목표: 정보처리기사 취득 및 컴퓨터비전 취업 포트폴리오 완성');
-  const [monthlyGoal, setMonthlyGoal] = useState<string>('10월 목표: CBT 엔진 고도화 및 전주대 날씨 과제 아키텍처 배포');
+  // 6. 올해/이달의 목표 (DB 동기화)
+  const [yearlyGoal, setYearlyGoal] = useState<string>('2026 목표 동기화 중...');
+  const [monthlyGoal, setMonthlyGoal] = useState<string>('이달 목표 동기화 중...');
   const [isEditingGoals, setIsEditingGoals] = useState<boolean>(false);
 
-  // 7. 달력 및 일정 (D-Day 포함)
-  const [schedules, setSchedules] = useState<ScheduleItem[]>(DEFAULT_SCHEDULES);
+  // 7. 달력 및 일정 (DB 동기화)
+  const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
   const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 9, 26));
   const [newTitle, setNewTitle] = useState<string>('');
   const [newDate, setNewDate] = useState<string>('2026-10-26');
@@ -96,15 +83,11 @@ export default function EngineeringHub() {
   const [customMinInput, setCustomMinInput] = useState<number>(25);
   const [timerLeft, setTimerLeft] = useState<number>(25 * 60);
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
-
   const [stopwatchTime, setStopwatchTime] = useState<number>(0);
   const [isStopwatchRunning, setIsStopwatchRunning] = useState<boolean>(false);
 
-  // 9. 학습 로그 게시판
-  const [studyLogs, setStudyLogs] = useState<StudyBoardLog[]>([
-    { id: 1, date: '2026-10-25', subject: '정처기 CBT', durationHours: 2, durationMinutes: 30, summary: '1과목 소프트웨어 설계 기출 80제 풀이' },
-    { id: 2, date: '2026-10-26', subject: '인공지능/비전', durationHours: 3, durationMinutes: 10, summary: 'OpenCV 기반 텔레메트리 파이프라인 디버깅' },
-  ]);
+  // 9. 학습 로그 게시판 (DB 동기화)
+  const [studyLogs, setStudyLogs] = useState<StudyBoardLog[]>([]);
   const [logDate, setLogDate] = useState<string>('2026-10-26');
   const [logSubject, setLogSubject] = useState<string>('정처기 CBT');
   const [logHours, setLogHours] = useState<number>(1);
@@ -146,7 +129,7 @@ export default function EngineeringHub() {
     } catch (e) {}
   };
 
-  // 실시간 시계
+  // 실시간 시계 & 가동 시간
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -185,7 +168,7 @@ export default function EngineeringHub() {
     return () => clearInterval(interval);
   }, [isStopwatchRunning]);
 
-  // 기상 관측 및 특보 감지
+  // 전주시 실시간 기상 관측 및 특보 감지
   useEffect(() => {
     const fetchJeonjuWeather = async () => {
       try {
@@ -232,58 +215,76 @@ export default function EngineeringHub() {
     fetchJeonjuWeather();
   }, []);
 
-  // 로컬 스토리지 데이터 복원
+  // Supabase 원격 DB 전체 동기화 엔진 (기기 간 일체화)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const savedAuth = sessionStorage.getItem('station_auth_status');
-    if (savedAuth === 'true') setIsAuthenticated(true);
-
-    const savedProfile = localStorage.getItem('station_user_profile');
-    if (savedProfile) {
-      try { setProfile(JSON.parse(savedProfile)); } catch (e) {}
-    }
-    const savedDoc = localStorage.getItem('station_career_doc');
-    if (savedDoc) setCareerDoc(savedDoc);
-
-    const savedScratch = localStorage.getItem('station_scratchpad');
-    if (savedScratch) setScratchpad(savedScratch);
-
-    const savedYearly = localStorage.getItem('station_yearly_goal');
-    if (savedYearly) setYearlyGoal(savedYearly);
-
-    const savedMonthly = localStorage.getItem('station_monthly_goal');
-    if (savedMonthly) setMonthlyGoal(savedMonthly);
-
-    const savedSchedules = localStorage.getItem('station_schedules');
-    if (savedSchedules) {
-      try {
-        const parsed = JSON.parse(savedSchedules);
-        if (Array.isArray(parsed) && parsed.length > 0) setSchedules(parsed);
-      } catch (e) {}
+    // 세션 인증 복원
+    if (sessionStorage.getItem('station_auth_status') === 'true') {
+      setIsAuthenticated(true);
     }
 
-    const savedBoardLogs = localStorage.getItem('station_board_study_logs');
-    if (savedBoardLogs) {
+    const syncAllFromSupabase = async () => {
       try {
-        const parsed = JSON.parse(savedBoardLogs);
-        if (Array.isArray(parsed) && parsed.length > 0) setStudyLogs(parsed);
-      } catch (e) {}
-    }
-
-    const fetchRemoteSchedules = async () => {
-      try {
-        const { data, error } = await supabase.from('user_schedules').select('*').order('date', { ascending: true });
-        if (!error && data && data.length > 0) {
-          setSchedules(data);
-          localStorage.setItem('station_schedules', JSON.stringify(data));
+        // 1. 프로필 로드
+        const { data: pData } = await supabase.from('user_profiles').select('*').eq('id', 1).single();
+        if (pData) {
+          setProfile({
+            name: pData.name,
+            affiliation: pData.affiliation,
+            specialization: pData.specialization,
+            coreStack: pData.core_stack,
+          });
         }
-      } catch (err) {}
+
+        // 2. 목표 로드
+        const { data: gData } = await supabase.from('user_goals').select('*').eq('id', 1).single();
+        if (gData) {
+          setYearlyGoal(gData.yearly_goal);
+          setMonthlyGoal(gData.monthly_goal);
+        }
+
+        // 3. 자소서 로드
+        const { data: cData } = await supabase.from('user_career_docs').select('*').eq('id', 1).single();
+        if (cData) {
+          setCareerDoc(cData.content);
+        }
+
+        // 4. 일정 로드
+        const { data: sData } = await supabase.from('user_schedules').select('*').order('date', { ascending: true });
+        if (sData) {
+          const mappedSchedules = sData.map((s) => ({
+            id: s.id,
+            date: s.date,
+            title: s.title,
+            category: s.category as 'DEV' | 'ACADEMIC' | 'PERSONAL',
+            isDday: Boolean(s.is_dday),
+          }));
+          setSchedules(mappedSchedules);
+        }
+
+        // 5. 학습 로그 로드
+        const { data: bData } = await supabase.from('study_board_logs').select('*').order('date', { ascending: false });
+        if (bData) {
+          const mappedLogs = bData.map((b) => ({
+            id: b.id,
+            date: b.date,
+            subject: b.subject,
+            durationHours: b.duration_hours,
+            durationMinutes: b.duration_minutes,
+            summary: b.summary,
+          }));
+          setStudyLogs(mappedLogs);
+        }
+      } catch (err) {
+        console.warn('Supabase sync offline, fallback to local state');
+      }
     };
-    fetchRemoteSchedules();
+
+    syncAllFromSupabase();
   }, []);
 
-  // 통합 로그인 처리
+  // 로그인 & 로그아웃
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     playClickSound();
@@ -307,14 +308,60 @@ export default function EngineeringHub() {
     sessionStorage.removeItem('station_auth_status');
   };
 
-  const handleSaveGoals = () => {
-    if (!isAuthenticated) return;
+  // 프로필 DB 저장
+  const handleSaveProfile = async () => {
     playClickSound();
-    localStorage.setItem('station_yearly_goal', yearlyGoal);
-    localStorage.setItem('station_monthly_goal', monthlyGoal);
-    setIsEditingGoals(false);
+    setIsEditingProfile(false);
+    try {
+      await supabase.from('user_profiles').upsert({
+        id: 1,
+        name: profile.name,
+        affiliation: profile.affiliation,
+        specialization: profile.specialization,
+        core_stack: profile.coreStack,
+        updated_at: new Date().toISOString(),
+      });
+      alert('프로필이 DB에 성공적으로 동기화되었습니다.');
+    } catch (err) {
+      alert('DB 동기화에 실패했습니다.');
+    }
   };
 
+  // 목표 DB 저장
+  const handleSaveGoals = async () => {
+    if (!isAuthenticated) return;
+    playClickSound();
+    setIsEditingGoals(false);
+    try {
+      await supabase.from('user_goals').upsert({
+        id: 1,
+        yearly_goal: yearlyGoal,
+        monthly_goal: monthlyGoal,
+        updated_at: new Date().toISOString(),
+      });
+      alert('연간/월간 목표가 DB에 성공적으로 동기화되었습니다.');
+    } catch (err) {
+      alert('DB 동기화에 실패했습니다.');
+    }
+  };
+
+  // 자소서 DB 저장
+  const handleSaveCareerDoc = async () => {
+    if (!isAuthenticated) return;
+    playClickSound();
+    try {
+      await supabase.from('user_career_docs').upsert({
+        id: 1,
+        content: careerDoc,
+        updated_at: new Date().toISOString(),
+      });
+      alert('자소서 데이터가 DB에 영구 저장되었습니다.');
+    } catch (err) {
+      alert('DB 저장 실패');
+    }
+  };
+
+  // 일정 추가 (DB 영구 보존)
   const handleAddSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAuthenticated) {
@@ -324,49 +371,51 @@ export default function EngineeringHub() {
     playClickSound();
     if (!newTitle.trim()) return;
 
-    const newItem: ScheduleItem = {
-      id: Date.now(),
-      date: newDate,
-      title: newTitle,
-      category: newCategory,
-      isDday: newIsDday,
-    };
-
-    const updated = [...schedules, newItem].sort((a, b) => a.date.localeCompare(b.date));
-    setSchedules(updated);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('station_schedules', JSON.stringify(updated));
-    }
-    setNewTitle('');
-    setNewIsDday(false);
-
     try {
-      await supabase.from('user_schedules').insert({
-        date: newDate,
-        title: newTitle,
-        category: newCategory,
-        is_dday: newIsDday,
-      });
-    } catch (err) {}
+      const { data, error } = await supabase
+        .from('user_schedules')
+        .insert({
+          date: newDate,
+          title: newTitle,
+          category: newCategory,
+          is_dday: newIsDday,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newItem: ScheduleItem = {
+        id: data.id,
+        date: data.date,
+        title: data.title,
+        category: data.category as 'DEV' | 'ACADEMIC' | 'PERSONAL',
+        isDday: Boolean(data.is_dday),
+      };
+
+      setSchedules((prev) => [...prev, newItem].sort((a, b) => a.date.localeCompare(b.date)));
+      setNewTitle('');
+      setNewIsDday(false);
+    } catch (err: unknown) {
+      alert(`일정 추가 실패: ${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
+  // 일정 삭제 (DB 삭제)
   const handleDeleteSchedule = async (id: number) => {
     if (!isAuthenticated) {
       alert('관리자 로그인이 필요한 작업입니다.');
       return;
     }
     playClickSound();
-    const updated = schedules.filter((item) => item.id !== id);
-    setSchedules(updated);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('station_schedules', JSON.stringify(updated));
-    }
+    setSchedules((prev) => prev.filter((item) => item.id !== id));
     try {
       await supabase.from('user_schedules').delete().eq('id', id);
     } catch (err) {}
   };
 
-  const handleAddStudyLog = (e: React.FormEvent) => {
+  // 학습 로그 등록 (DB 영구 보존)
+  const handleAddStudyLog = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAuthenticated) {
       alert('관리자 로그인이 필요한 작업입니다.');
@@ -376,36 +425,51 @@ export default function EngineeringHub() {
     const durationTotalMin = logHours * 60 + logMinutes;
     if (durationTotalMin <= 0) return;
 
-    const newLog: StudyBoardLog = {
-      id: Date.now(),
-      date: logDate,
-      subject: logSubject,
-      durationHours: logHours,
-      durationMinutes: logMinutes,
-      summary: logSummary.trim() || '학습 내용 요약 없음',
-    };
+    try {
+      const { data, error } = await supabase
+        .from('study_board_logs')
+        .insert({
+          date: logDate,
+          subject: logSubject,
+          duration_hours: logHours,
+          duration_minutes: logMinutes,
+          summary: logSummary.trim() || '학습 내용 요약 없음',
+        })
+        .select()
+        .single();
 
-    const updated = [newLog, ...studyLogs].sort((a, b) => b.date.localeCompare(a.date));
-    setStudyLogs(updated);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('station_board_study_logs', JSON.stringify(updated));
+      if (error) throw error;
+
+      const newLog: StudyBoardLog = {
+        id: data.id,
+        date: data.date,
+        subject: data.subject,
+        durationHours: data.duration_hours,
+        durationMinutes: data.duration_minutes,
+        summary: data.summary,
+      };
+
+      setStudyLogs((prev) => [newLog, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
+      setLogSummary('');
+    } catch (err: unknown) {
+      alert(`학습 기록 등록 실패: ${err instanceof Error ? err.message : String(err)}`);
     }
-    setLogSummary('');
   };
 
-  const handleDeleteStudyLog = (id: number) => {
+  // 학습 로그 삭제 (DB 삭제)
+  const handleDeleteStudyLog = async (id: number) => {
     if (!isAuthenticated) {
       alert('관리자 로그인이 필요한 작업입니다.');
       return;
     }
     playClickSound();
-    const updated = studyLogs.filter((item) => item.id !== id);
-    setStudyLogs(updated);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('station_board_study_logs', JSON.stringify(updated));
-    }
+    setStudyLogs((prev) => prev.filter((item) => item.id !== id));
+    try {
+      await supabase.from('study_board_logs').delete().eq('id', id);
+    } catch (err) {}
   };
 
+  // D-Day 계산 유틸리티
   const calculateDday = (targetDateStr: string) => {
     if (!targetDateStr) return 'D-DAY';
     try {
@@ -425,6 +489,7 @@ export default function EngineeringHub() {
     }
   };
 
+  // 커플 기념일 및 마일스톤 연산
   const calculateCoupleMilestones = () => {
     const startDate = new Date(2019, 11, 7);
     startDate.setHours(0, 0, 0, 0);
@@ -585,7 +650,7 @@ export default function EngineeringHub() {
             SFX: {soundEnabled ? 'ON' : 'MUTE'}
           </button>
 
-          {/* 통합 로그인/로그아웃 버튼 */}
+          {/* 통합 관리자 로그인/로그아웃 */}
           {isAuthenticated ? (
             <button
               onClick={handleLogout}
@@ -842,7 +907,7 @@ export default function EngineeringHub() {
               })}
             </div>
 
-            {/* 일정 추가 폼 (인증 제어) */}
+            {/* 일정 추가 폼 */}
             {isAuthenticated ? (
               <form onSubmit={handleAddSchedule} className="pt-3 border-t border-[#30363d] flex flex-col sm:flex-row gap-2 items-center">
                 <input
@@ -894,7 +959,7 @@ export default function EngineeringHub() {
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold text-[#8b949e] uppercase">SCHEDULED_EVENTS_QUEUE</span>
-              <span className="text-[10px] text-[#238636]">STORAGE: SYNCED</span>
+              <span className="text-[10px] text-[#238636]">STORAGE: SUPABASE_LIVE</span>
             </div>
             <div className="space-y-2">
               {schedules.map((s) => (
@@ -982,16 +1047,16 @@ export default function EngineeringHub() {
             )}
           </div>
 
-          {/* 학습 로그 게시판 (인증 제어) */}
+          {/* 학습 로그 게시판 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-3 mb-4">
               <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
                 <span>📚 STUDY_BOARD_ARCHIVE</span>
                 <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-950/60 text-purple-300 border border-purple-500/40">
-                  게시판 연동형
+                  DB 실시간 연동
                 </span>
               </span>
-              <span className="text-[10px] text-[#8b949e]">날짜별 학습 기록</span>
+              <span className="text-[10px] text-[#8b949e]">기기 간 동기화</span>
             </div>
 
             {isAuthenticated ? (
@@ -1221,12 +1286,9 @@ export default function EngineeringHub() {
                 {isAuthenticated && (
                   <button
                     onClick={() => {
-                      playClickSound();
-                      if (isEditingProfile) {
-                        localStorage.setItem('station_user_profile', JSON.stringify(profile));
-                        setIsEditingProfile(false);
-                        alert('프로필 변경 사항이 저장되었습니다.');
-                      } else {
+                      if (isEditingProfile) handleSaveProfile();
+                      else {
+                        playClickSound();
                         setIsEditingProfile(true);
                       }
                     }}
@@ -1325,7 +1387,7 @@ export default function EngineeringHub() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div className="text-[10px] text-[#8b949e]">* 상시 수정 및 영구 보존 모드입니다.</div>
+                  <div className="text-[10px] text-[#8b949e]">* Supabase DB 실시간 저장 모드입니다.</div>
                   <textarea
                     rows={8}
                     value={careerDoc}
@@ -1335,11 +1397,7 @@ export default function EngineeringHub() {
                   <div className="flex justify-between items-center text-[11px]">
                     <span className="text-[#8b949e]">{careerDoc.length} characters</span>
                     <button
-                      onClick={() => {
-                        playClickSound();
-                        localStorage.setItem('station_career_doc', careerDoc);
-                        alert('자소서 데이터가 안전하게 영구 저장되었습니다.');
-                      }}
+                      onClick={handleSaveCareerDoc}
                       className="bg-[#238636] hover:bg-[#2ea043] text-white px-3 py-1 rounded text-xs font-bold"
                     >
                       COMMIT_CHANGES
