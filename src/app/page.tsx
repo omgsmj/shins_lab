@@ -19,18 +19,20 @@ interface UserProfile {
   coreStack: string;
 }
 
-interface StudyRecord {
+interface StudyBoardLog {
   id: number;
-  subject: string;
-  minutes: number;
   date: string;
+  subject: string;
+  durationHours: number;
+  durationMinutes: number;
+  summary: string;
 }
 
 const DEFAULT_SCHEDULES: ScheduleItem[] = [
   { id: 1, date: '2026-10-26', title: '정보처리기사 CBT 엔진 빌드', category: 'DEV', isDday: false },
   { id: 2, date: '2026-10-28', title: 'AI 파이프라인 통합 테스트', category: 'ACADEMIC', isDday: true },
   { id: 3, date: '2026-11-05', title: '기술 자소서 1차 탈고', category: 'DEV', isDday: true },
-  { id: 4, date: '2026-12-18', title: '생일 및 2026 학기 마감', category: 'PERSONAL', isDday: true },
+  { id: 4, date: '2026-12-18', title: '본인 생일', category: 'PERSONAL', isDday: true },
 ];
 
 export default function EngineeringHub() {
@@ -94,10 +96,16 @@ export default function EngineeringHub() {
   const [stopwatchTime, setStopwatchTime] = useState<number>(0);
   const [isStopwatchRunning, setIsStopwatchRunning] = useState<boolean>(false);
 
-  // 8. 공부 시간 기록기
-  const [studyLogs, setStudyLogs] = useState<StudyRecord[]>([]);
-  const [newStudySubject, setNewStudySubject] = useState<string>('정처기 CBT');
-  const [newStudyMinutes, setNewStudyMinutes] = useState<number>(30);
+  // 8. 학습 로그 게시판 상태
+  const [studyLogs, setStudyLogs] = useState<StudyBoardLog[]>([
+    { id: 1, date: '2026-10-25', subject: '정처기 CBT', durationHours: 2, durationMinutes: 30, summary: '1과목 소프트웨어 설계 기출 80제 풀이' },
+    { id: 2, date: '2026-10-26', subject: '인공지능/비전', durationHours: 3, durationMinutes: 10, summary: 'OpenCV 기반 텔레메트리 파이프라인 디버깅' },
+  ]);
+  const [logDate, setLogDate] = useState<string>('2026-10-26');
+  const [logSubject, setLogSubject] = useState<string>('정처기 CBT');
+  const [logHours, setLogHours] = useState<number>(1);
+  const [logMinutes, setLogMinutes] = useState<number>(30);
+  const [logSummary, setLogSummary] = useState<string>('');
 
   // 9. 스크래치패드
   const [scratchpad, setScratchpad] = useState<string>(
@@ -134,7 +142,7 @@ export default function EngineeringHub() {
     } catch (e) {}
   };
 
-  // 실시간 시계 & 업타임
+  // 실시간 시계
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -151,7 +159,7 @@ export default function EngineeringHub() {
     return () => clearInterval(timer);
   }, []);
 
-  // 커스텀 타이머 루프
+  // 타이머 루프
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isTimerRunning && timerLeft > 0) {
@@ -173,7 +181,7 @@ export default function EngineeringHub() {
     return () => clearInterval(interval);
   }, [isStopwatchRunning]);
 
-  // 전주시 실시간 기상 관측 및 특보 감지
+  // 기상 관측 및 특보 감지
   useEffect(() => {
     const fetchJeonjuWeather = async () => {
       try {
@@ -248,11 +256,11 @@ export default function EngineeringHub() {
       } catch (e) {}
     }
 
-    const savedStudyLogs = localStorage.getItem('station_study_logs');
-    if (savedStudyLogs) {
+    const savedBoardLogs = localStorage.getItem('station_board_study_logs');
+    if (savedBoardLogs) {
       try {
-        const parsed = JSON.parse(savedStudyLogs);
-        if (Array.isArray(parsed)) setStudyLogs(parsed);
+        const parsed = JSON.parse(savedBoardLogs);
+        if (Array.isArray(parsed) && parsed.length > 0) setStudyLogs(parsed);
       } catch (e) {}
     }
 
@@ -318,38 +326,36 @@ export default function EngineeringHub() {
     } catch (err) {}
   };
 
-  // 공부 시간 기록 추가
+  // 학습 로그 게시판 등록 핸들러
   const handleAddStudyLog = (e: React.FormEvent) => {
     e.preventDefault();
     playClickSound();
-    if (newStudyMinutes <= 0) return;
+    const durationTotalMin = logHours * 60 + logMinutes;
+    if (durationTotalMin <= 0) return;
 
-    const newLog: StudyRecord = {
+    const newLog: StudyBoardLog = {
       id: Date.now(),
-      subject: newStudySubject,
-      minutes: Number(newStudyMinutes),
-      date: new Date().toISOString().split('T')[0],
+      date: logDate,
+      subject: logSubject,
+      durationHours: logHours,
+      durationMinutes: logMinutes,
+      summary: logSummary.trim() || '학습 내용 요약 없음',
     };
 
-    const updated = [newLog, ...studyLogs];
+    const updated = [newLog, ...studyLogs].sort((a, b) => b.date.localeCompare(a.date));
     setStudyLogs(updated);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('station_study_logs', JSON.stringify(updated));
+      localStorage.setItem('station_board_study_logs', JSON.stringify(updated));
     }
+    setLogSummary('');
   };
 
-  // 사귄 날짜 (2019-12-07, 당일=1일) 계산기
-  const calculateLoveDays = () => {
-    try {
-      const startDate = new Date(2019, 11, 7); // 2019년 12월 7일
-      startDate.setHours(0, 0, 0, 0);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const diffTime = today.getTime() - startDate.getTime();
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // 1일차 포함
-      return diffDays;
-    } catch (e) {
-      return 2516;
+  const handleDeleteStudyLog = (id: number) => {
+    playClickSound();
+    const updated = studyLogs.filter((item) => item.id !== id);
+    setStudyLogs(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('station_board_study_logs', JSON.stringify(updated));
     }
   };
 
@@ -373,6 +379,53 @@ export default function EngineeringHub() {
     }
   };
 
+  // 커플 기념일 및 다가오는 마일스톤 연산 엔진
+  const calculateCoupleMilestones = () => {
+    const startDate = new Date(2019, 11, 7); // 2019-12-07
+    startDate.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const diffDays = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    // 1. 다음 100일 단위 (예: 2600일)
+    const nextHundreds = Math.ceil(diffDays / 100) * 100 === diffDays ? diffDays + 100 : Math.ceil(diffDays / 100) * 100;
+    const daysUntilNextHundreds = nextHundreds - diffDays;
+
+    // 2. 다음 N주년 계산
+    const currentYear = today.getFullYear();
+    let nextAnnivYear = currentYear;
+    let nextAnnivDate = new Date(nextAnnivYear, 11, 7);
+    if (today > nextAnnivDate) {
+      nextAnnivYear += 1;
+      nextAnnivDate = new Date(nextAnnivYear, 11, 7);
+    }
+    const nextAnnivYears = nextAnnivYear - 2019;
+    const diffAnnivDays = Math.round((nextAnnivDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    // 3. 여자친구 다음 생일 (05-21)
+    let gfNextBday = new Date(currentYear, 4, 21);
+    if (today > gfNextBday) gfNextBday = new Date(currentYear + 1, 4, 21);
+    const diffGfDays = Math.round((gfNextBday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    // 4. 본인 다음 생일 (12-18)
+    let myNextBday = new Date(currentYear, 11, 18);
+    if (today > myNextBday) myNextBday = new Date(currentYear + 1, 11, 18);
+    const diffMyDays = Math.round((myNextBday.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    return {
+      currentDays: diffDays,
+      nextHundreds,
+      daysUntilNextHundreds,
+      nextAnnivYears,
+      diffAnnivDays,
+      diffGfDays,
+      diffMyDays,
+    };
+  };
+
+  const milestones = isMounted ? calculateCoupleMilestones() : null;
+
   const formatTimer = (sec: number) => {
     const h = Math.floor(sec / 3600);
     const m = Math.floor((sec % 3600) / 60);
@@ -383,10 +436,21 @@ export default function EngineeringHub() {
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  const totalStudyMinutes = studyLogs.reduce((acc, cur) => acc + cur.minutes, 0);
-
+  // 달력 및 이번 달 통계 계산
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
+  const currentMonthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+  const currentMonthLogs = studyLogs.filter((log) => log.date.startsWith(currentMonthKey));
+  const currentMonthTotalMinutes = currentMonthLogs.reduce((acc, cur) => acc + cur.durationHours * 60 + cur.durationMinutes, 0);
+
+  // 과목별 점유율 통계
+  const subjectMap: Record<string, number> = {};
+  currentMonthLogs.forEach((l) => {
+    const mins = l.durationHours * 60 + l.durationMinutes;
+    subjectMap[l.subject] = (subjectMap[l.subject] || 0) + mins;
+  });
+
   const firstDayIndex = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
@@ -467,7 +531,7 @@ export default function EngineeringHub() {
         </div>
       </header>
 
-      {/* 2. 빠른 실행 서브시스템 링크 (통합 런처: CBT + 날씨 + 공부 기록) */}
+      {/* 2. 빠른 실행 서브시스템 링크 (통합 런처: CBT + 전주대 날씨 + 학습 게시판) */}
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         <Link
           href="/cbt"
@@ -499,43 +563,24 @@ export default function EngineeringHub() {
           <div className="text-xs text-[#8b949e] mt-1">캠퍼스(효자동) 실시간 기상 관측 및 단기 예보</div>
         </Link>
 
-        {/* 공부 시간 기록 패널 (GitHub 대체) */}
+        {/* ENGINE 03: 학습 보드 바로가기 카드 */}
         <div className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg shadow flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-[#8b949e]">ENGINE 03</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#a371f7]/20 text-[#d2a8ff] border border-[#a371f7]/40">
-              TOTAL: {Math.floor(totalStudyMinutes / 60)}h {totalStudyMinutes % 60}m
+              LOGS: {studyLogs.length}건
             </span>
           </div>
-          <div className="text-base font-bold text-white mt-1">공부 시간 트래커</div>
-          <form onSubmit={handleAddStudyLog} className="mt-2 flex gap-1.5 items-center">
-            <input
-              type="text"
-              value={newStudySubject}
-              onChange={(e) => setNewStudySubject(e.target.value)}
-              placeholder="과목"
-              className="bg-[#0d1117] border border-[#30363d] text-[11px] px-2 py-1 rounded text-white w-24 focus:outline-none focus:border-[#a371f7]"
-            />
-            <input
-              type="number"
-              value={newStudyMinutes}
-              onChange={(e) => setNewStudyMinutes(Number(e.target.value))}
-              placeholder="분"
-              className="bg-[#0d1117] border border-[#30363d] text-[11px] px-2 py-1 rounded text-white w-14 focus:outline-none focus:border-[#a371f7]"
-            />
-            <button
-              type="submit"
-              className="bg-[#6e40c9] hover:bg-[#8957e5] text-white text-[11px] px-2.5 py-1 rounded font-bold transition whitespace-nowrap"
-            >
-              +LOG
-            </button>
-          </form>
+          <div className="text-base font-bold text-white mt-1">학습 로그 게시판</div>
+          <div className="text-xs text-[#8b949e] mt-1">
+            당월 누적: <span className="text-[#d2a8ff] font-bold">{Math.floor(currentMonthTotalMinutes / 60)}시간 {currentMonthTotalMinutes % 60}분</span> 기록 중
+          </div>
         </div>
       </section>
 
-      {/* 메인 2열 그리드: 일정/캘린더 vs 프로필/자소서 금고 */}
+      {/* 메인 2열 그리드: 일정/달력/학습게시판 vs 프로필/자소서/커플위젯 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* [좌측 7열]: 올해/이달 목표 보드 + 달력 및 일정 */}
+        {/* [좌측 7열]: 올해/이달 목표 + 달력 + 학습 시간 통계 및 로그 게시판 */}
         <section className="lg:col-span-7 space-y-6">
           {/* 달력 상단: 올해 목표 & 이달의 목표 편집 보드 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-4 shadow-lg">
@@ -644,6 +689,7 @@ export default function EngineeringHub() {
                     onClick={() => {
                       playClickSound();
                       setNewDate(dateKey);
+                      setLogDate(dateKey);
                     }}
                     className={`min-h-[72px] border rounded p-1 text-left flex flex-col justify-start cursor-pointer transition overflow-hidden ${
                       isToday
@@ -719,51 +765,153 @@ export default function EngineeringHub() {
             </form>
           </div>
 
-          {/* 등록된 일정 큐 리스트 */}
-          <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-[#8b949e] uppercase">SCHEDULED_EVENTS_QUEUE</span>
-              <span className="text-[10px] text-[#238636]">STORAGE: SYNCED</span>
+          {/* 달력 밑쪽: 이번 달 학습 누적 통계 & 미니 바 차트 */}
+          <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-4 shadow-lg">
+            <div className="flex items-center justify-between border-b border-[#30363d] pb-2 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-white uppercase tracking-wider">MONTHLY_STUDY_METRICS</span>
+                <span className="text-[10px] text-[#8b949e]">({year}년 {month + 1}월 기준)</span>
+              </div>
+              <span className="text-xs font-bold text-[#d2a8ff]">
+                총 {Math.floor(currentMonthTotalMinutes / 60)}시간 {currentMonthTotalMinutes % 60}분
+              </span>
             </div>
-            <div className="space-y-2">
-              {schedules.map((s) => (
-                <div
-                  key={s.id}
-                  className="flex items-center justify-between p-2.5 rounded bg-[#0d1117] border border-[#21262d] text-xs"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-[#58a6ff] text-[11px]">{s.date}</span>
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                        s.category === 'DEV'
-                          ? 'bg-[#238636]/20 text-[#7ee787]'
-                          : s.category === 'ACADEMIC'
-                          ? 'bg-[#1f6feb]/20 text-[#58a6ff]'
-                          : 'bg-[#a371f7]/20 text-[#d2a8ff]'
-                      }`}
-                    >
-                      {s.category}
-                    </span>
-                    <span className="text-slate-200">{s.title}</span>
-                    {s.isDday && isMounted && (
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
-                        {calculateDday(s.date)}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => handleDeleteSchedule(s.id)}
-                    className="text-[#8b949e] hover:text-[#f85149] text-xs px-1"
-                  >
-                    ×
-                  </button>
+
+            {/* 과목별 누적 분포 미니 바 차트 */}
+            {currentMonthTotalMinutes === 0 ? (
+              <div className="text-[11px] text-[#8b949e] py-1 text-center">이번 달 등록된 공부 시간이 없습니다.</div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-[#0d1117] border border-[#21262d]">
+                  {Object.entries(subjectMap).map(([subj, mins], idx) => {
+                    const pct = Math.round((mins / currentMonthTotalMinutes) * 100);
+                    const colors = ['bg-[#58a6ff]', 'bg-[#7ee787]', 'bg-[#d2a8ff]', 'bg-[#f0883e]', 'bg-[#f85149]'];
+                    return (
+                      <div
+                        key={subj}
+                        style={{ width: `${pct}%` }}
+                        className={`${colors[idx % colors.length]} transition-all`}
+                        title={`${subj}: ${Math.floor(mins / 60)}h ${mins % 60}m (${pct}%)`}
+                      />
+                    );
+                  })}
                 </div>
-              ))}
+
+                <div className="flex flex-wrap gap-3 text-[10px] text-[#8b949e] pt-1">
+                  {Object.entries(subjectMap).map(([subj, mins], idx) => {
+                    const colors = ['text-[#58a6ff]', 'text-[#7ee787]', 'text-[#d2a8ff]', 'text-[#f0883e]', 'text-[#f85149]'];
+                    return (
+                      <div key={subj} className="flex items-center gap-1">
+                        <span className={`font-bold ${colors[idx % colors.length]}`}>■</span>
+                        <span>{subj}</span>
+                        <span className="text-white font-bold">{Math.floor(mins / 60)}h {mins % 60}m</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 학습 로그 게시판 (Study Dev Logs) */}
+          <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
+            <div className="flex items-center justify-between border-b border-[#30363d] pb-3 mb-4">
+              <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <span>📚 STUDY_BOARD_ARCHIVE</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-950/60 text-purple-300 border border-purple-500/40">
+                  게시판 연동형
+                </span>
+              </span>
+              <span className="text-[10px] text-[#8b949e]">날짜별 학습 기록</span>
+            </div>
+
+            {/* 학습 기록 주입 폼 */}
+            <form onSubmit={handleAddStudyLog} className="bg-[#0d1117] p-3 rounded-lg border border-[#21262d] mb-4 space-y-2 text-xs">
+              <div className="flex flex-wrap gap-2 items-center">
+                <input
+                  type="date"
+                  value={logDate}
+                  onChange={(e) => setLogDate(e.target.value)}
+                  className="bg-[#161b22] border border-[#30363d] px-2 py-1 rounded text-white text-xs focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={logSubject}
+                  onChange={(e) => setLogSubject(e.target.value)}
+                  placeholder="과목 / 분야"
+                  className="bg-[#161b22] border border-[#30363d] px-2 py-1 rounded text-white text-xs w-32 focus:outline-none focus:border-[#a371f7]"
+                />
+                <div className="flex items-center gap-1 text-[#8b949e]">
+                  <input
+                    type="number"
+                    min="0"
+                    max="23"
+                    value={logHours}
+                    onChange={(e) => setLogHours(Number(e.target.value))}
+                    className="w-12 bg-[#161b22] border border-[#30363d] px-1.5 py-1 rounded text-white text-xs text-center focus:outline-none"
+                  />
+                  <span>시간</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    value={logMinutes}
+                    onChange={(e) => setLogMinutes(Number(e.target.value))}
+                    className="w-12 bg-[#161b22] border border-[#30363d] px-1.5 py-1 rounded text-white text-xs text-center focus:outline-none"
+                  />
+                  <span>분</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={logSummary}
+                  onChange={(e) => setLogSummary(e.target.value)}
+                  placeholder="학습 내용 상세 (예: 기출문제 풀이, 논문 리딩, 알고리즘 구현 등)..."
+                  className="flex-1 bg-[#161b22] border border-[#30363d] px-2.5 py-1 rounded text-white text-xs focus:outline-none focus:border-[#a371f7]"
+                />
+                <button
+                  type="submit"
+                  className="bg-[#6e40c9] hover:bg-[#8957e5] text-white px-3 py-1 rounded font-bold transition text-xs whitespace-nowrap"
+                >
+                  + 기록 등록
+                </button>
+              </div>
+            </form>
+
+            {/* 학습 기록 게시물 목록 */}
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {studyLogs.length === 0 ? (
+                <div className="text-[11px] text-[#8b949e] py-4 text-center">등록된 학습 게시물이 없습니다.</div>
+              ) : (
+                studyLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded bg-[#0d1117] border border-[#21262d] text-xs gap-2"
+                  >
+                    <div className="flex items-start sm:items-center gap-2.5">
+                      <span className="font-mono text-[#58a6ff] text-[11px] shrink-0">{log.date}</span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#6e40c9]/20 text-[#d2a8ff] border border-[#6e40c9]/40 shrink-0">
+                        {log.subject}
+                      </span>
+                      <span className="text-white font-bold shrink-0">{log.durationHours}h {log.durationMinutes}m</span>
+                      <span className="text-slate-300 truncate max-w-[280px]">{log.summary}</span>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteStudyLog(log.id)}
+                      className="text-[#8b949e] hover:text-[#f85149] text-xs px-1 self-end sm:self-auto"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </section>
 
-        {/* [우측 5열]: 크로노 모듈(타이머/스톱워치) + 자소서 금고 + 커플 디데이 위젯 */}
+        {/* [우측 5열]: 크로노 모듈 + 대표소개/자소서 + 커플 텔레메트리 마일스톤 */}
         <section className="lg:col-span-5 space-y-6">
           {/* 다기능 크로노 모듈 (타이머 & 스톱워치) */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
@@ -1059,7 +1207,7 @@ export default function EngineeringHub() {
             </div>
           </div>
 
-          {/* 대문 오른쪽 아래: 커플 디데이 위젯 (2019-12-07 ~ Day N) */}
+          {/* 대문 오른쪽 아래: 커플 텔레메트리 & 마일스톤 자동 알리미 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-2 mb-3">
               <span className="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -1070,17 +1218,40 @@ export default function EngineeringHub() {
               </span>
             </div>
 
-            <div className="flex items-baseline justify-between">
-              <div>
-                <div className="text-xs text-[#8b949e]">함께한 시간 (사귄 날 = 1일)</div>
-                <div className="text-3xl font-extrabold font-mono text-white mt-1">
-                  Day <span className="text-rose-400">{isMounted ? calculateLoveDays() : '---'}</span>
+            {/* 현재 일수 (단백한 공대 스타일) */}
+            <div className="mb-4">
+              <div className="text-3xl font-extrabold font-mono text-white">
+                Day <span className="text-rose-400">{milestones ? milestones.currentDays : '---'}</span>
+              </div>
+            </div>
+
+            {/* 다가오는 4대 마일스톤 자동 알리미 */}
+            <div className="space-y-2 border-t border-[#21262d] pt-3 text-xs">
+              <div className="text-[10px] font-bold text-[#8b949e] uppercase">UPCOMING_MILESTONES</div>
+
+              {milestones && (
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="bg-[#0d1117] p-2 rounded border border-[#21262d] flex justify-between items-center">
+                    <span className="text-[#c9d1d9]">{milestones.nextHundreds}일</span>
+                    <span className="font-bold text-amber-400">D-{milestones.daysUntilNextHundreds}</span>
+                  </div>
+
+                  <div className="bg-[#0d1117] p-2 rounded border border-[#21262d] flex justify-between items-center">
+                    <span className="text-[#c9d1d9]">{milestones.nextAnnivYears}주년</span>
+                    <span className="font-bold text-amber-400">D-{milestones.diffAnnivDays}</span>
+                  </div>
+
+                  <div className="bg-[#0d1117] p-2 rounded border border-[#21262d] flex justify-between items-center">
+                    <span className="text-[#c9d1d9]">여친 생일 (05.21)</span>
+                    <span className="font-bold text-rose-400">D-{milestones.diffGfDays}</span>
+                  </div>
+
+                  <div className="bg-[#0d1117] p-2 rounded border border-[#21262d] flex justify-between items-center">
+                    <span className="text-[#c9d1d9]">내 생일 (12.18)</span>
+                    <span className="font-bold text-[#58a6ff]">D-{milestones.diffMyDays}</span>
+                  </div>
                 </div>
-              </div>
-              <div className="text-right text-[11px] text-[#8b949e]">
-                <div>시작일: 2019년 12월 7일</div>
-                <div className="text-[#7ee787]">IN LOVE FOREVER</div>
-              </div>
+              )}
             </div>
           </div>
 
