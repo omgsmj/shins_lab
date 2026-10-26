@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -32,22 +34,22 @@ export default function LedgerPage() {
   const [isEditingBudget, setIsEditingBudget] = useState<boolean>(false);
   const [budgetInput, setBudgetInput] = useState<number>(600000);
 
-  // 입력 폼 상태
-  const todayStr = new Date().toISOString().split('T')[0];
-  const [inputDate, setInputDate] = useState<string>(todayStr);
+  // 입력 폼 상태 (기본값 정적 처리 후 마운트 시 갱신)
+  const [inputDate, setInputDate] = useState<string>('2026-10-26');
   const [inputType, setInputType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
   const [inputCategory, setInputCategory] = useState<string>('식비');
   const [inputAmount, setInputAmount] = useState<string>('');
   const [inputDesc, setInputDesc] = useState<string>('');
   const [inputPayment, setInputPayment] = useState<string>('CARD');
+  const [selectedMonth, setSelectedMonth] = useState<string>('2026-10');
 
-  // 조회 필터 상태
-  const currentMonthPrefix = todayStr.substring(0, 7);
-  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthPrefix);
-
-  // 1. 인증 상태 확인
+  // 인증 및 날짜 초기화
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      const todayFormatted = new Date().toISOString().split('T')[0];
+      setInputDate(todayFormatted);
+      setSelectedMonth(todayFormatted.substring(0, 7));
+
       const auth = sessionStorage.getItem('station_auth_status') === 'true';
       setIsAuthenticated(auth);
       setAuthChecked(true);
@@ -57,7 +59,6 @@ export default function LedgerPage() {
     }
   }, []);
 
-  // 2. 로그인 처리
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (loginId === 'admin' && loginPw === 'tlsalswhd') {
@@ -76,7 +77,6 @@ export default function LedgerPage() {
     setItems([]);
   };
 
-  // 3. 데이터 로드 (인증 통과 시에만 실행)
   const fetchData = async () => {
     try {
       const { data: bData } = await supabase.from('monthly_budget_config').select('*').eq('id', 1).maybeSingle();
@@ -98,7 +98,6 @@ export default function LedgerPage() {
     }
   };
 
-  // 지출/수입 등록
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
     const amountNum = parseInt(inputAmount, 10);
@@ -130,7 +129,6 @@ export default function LedgerPage() {
     }
   };
 
-  // 항목 삭제
   const handleDeleteItem = async (id: number) => {
     if (!confirm('이 기록을 삭제하시겠습니까?')) return;
     const { error } = await supabase.from('daily_ledger').delete().eq('id', id);
@@ -141,7 +139,6 @@ export default function LedgerPage() {
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  // 예산 변경 저장
   const handleSaveBudget = async () => {
     if (budgetInput <= 0) return;
     const { error } = await supabase.from('monthly_budget_config').upsert({ id: 1, target_budget: budgetInput });
@@ -153,7 +150,6 @@ export default function LedgerPage() {
     setIsEditingBudget(false);
   };
 
-  // 비로그인 상태일 때 보여줄 보안 잠금 화면
   if (authChecked && !isAuthenticated) {
     return (
       <div className="min-h-screen bg-[#090b10] text-[#c9d1d9] font-mono flex items-center justify-center p-4">
@@ -213,12 +209,11 @@ export default function LedgerPage() {
     );
   }
 
-  // 당월 통계 집계 연산
   const filteredItems = items.filter((item) => item.date.startsWith(selectedMonth));
   const totalExpense = filteredItems.filter((i) => i.type === 'EXPENSE').reduce((acc, cur) => acc + cur.amount, 0);
   const totalIncome = filteredItems.filter((i) => i.type === 'INCOME').reduce((acc, cur) => acc + cur.amount, 0);
   const remainingBudget = monthlyBudget - totalExpense;
-  const burnRatePct = Math.min(100, Math.round((totalExpense / monthlyBudget) * 100));
+  const burnRatePct = monthlyBudget > 0 ? Math.min(100, Math.round((totalExpense / monthlyBudget) * 100)) : 0;
 
   const categoryStats: Record<string, number> = {};
   filteredItems
@@ -229,7 +224,6 @@ export default function LedgerPage() {
 
   return (
     <div className="min-h-screen bg-[#090b10] text-[#c9d1d9] font-mono selection:bg-[#238636] selection:text-white p-4 md:p-8">
-      {/* 상단 헤더 바 */}
       <header className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center gap-3">
           <Link href="/" className="text-xs text-[#58a6ff] hover:underline font-bold">
@@ -247,7 +241,6 @@ export default function LedgerPage() {
           </button>
         </div>
 
-        {/* 월 선택 */}
         <div className="flex items-center gap-2 text-xs">
           <span className="text-[#8b949e]">TARGET_MONTH:</span>
           <input
@@ -259,7 +252,6 @@ export default function LedgerPage() {
         </div>
       </header>
 
-      {/* 대시보드 3열 위젯 */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="border border-[#30363d] bg-[#161b22] p-5 rounded-lg shadow-lg">
           <div className="text-[10px] text-[#8b949e] uppercase mb-1">TOTAL_MONTHLY_EXPENSE</div>
@@ -327,9 +319,7 @@ export default function LedgerPage() {
         </div>
       </section>
 
-      {/* 메인 2열 레이아웃 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* [좌측 4열]: 지출/수입 빠른 입력창 & 카테고리 요약 */}
         <div className="lg:col-span-4 space-y-6">
           <div className="border border-[#30363d] bg-[#161b22] p-5 rounded-lg shadow-lg">
             <span className="text-xs font-bold text-white uppercase tracking-wider block border-b border-[#30363d] pb-2 mb-4">
@@ -410,7 +400,7 @@ export default function LedgerPage() {
                 <label className="text-[10px] text-[#8b949e] uppercase block mb-1">DESCRIPTION</label>
                 <input
                   type="text"
-                  placeholder="사용처 메모 (예: 학생식당, 편의점, 전공서적 등)..."
+                  placeholder="사용처 메모 (예: 학생식당, 편의점 등)..."
                   value={inputDesc}
                   onChange={(e) => setInputDesc(e.target.value)}
                   className="w-full bg-[#0d1117] border border-[#30363d] px-3 py-1.5 rounded text-white text-xs focus:outline-none focus:border-[#58a6ff]"
@@ -458,7 +448,6 @@ export default function LedgerPage() {
           </div>
         </div>
 
-        {/* [우측 8열]: 거래 내역 리스트 */}
         <div className="lg:col-span-8">
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-3 mb-4">

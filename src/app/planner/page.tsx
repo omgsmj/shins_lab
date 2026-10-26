@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -25,39 +27,41 @@ const CATEGORY_MAP: Record<string, { label: string; bg: string; border: string; 
 const HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 06:00 ~ 23:00
 
 export default function PlannerPage() {
-  const todayStr = new Date().toISOString().split('T')[0];
-  const [targetDate, setTargetDate] = useState<string>(todayStr);
+  const [targetDate, setTargetDate] = useState<string>('2026-10-26');
+  const [todayStr, setTodayStr] = useState<string>('2026-10-26');
   const [blocks, setBlocks] = useState<TimeBlock[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // 실시간 현재 시간 게이지 (분 단위)
   const [currentMinutesFrom6AM, setCurrentMinutesFrom6AM] = useState<number>(-1);
 
-  // 새 블록 생성 폼 상태
   const [title, setTitle] = useState<string>('');
   const [category, setCategory] = useState<string>('STUDY');
   const [startHour, setStartHour] = useState<number>(14);
   const [startMinute, setStartMinute] = useState<number>(0);
   const [duration, setDuration] = useState<number>(60);
 
-  // 실시간 현재 시간 갱신
   useEffect(() => {
-    const updateTimeLine = () => {
-      const now = new Date();
-      const h = now.getHours();
-      const m = now.getMinutes();
-      if (h >= 6 && h <= 23) {
-        setCurrentMinutesFrom6AM((h - 6) * 60 + m);
-      } else {
-        setCurrentMinutesFrom6AM(-1);
-      }
-    };
-    updateTimeLine();
-    const timer = setInterval(updateTimeLine, 60000);
-    return () => clearInterval(timer);
+    if (typeof window !== 'undefined') {
+      const nowFormatted = new Date().toISOString().split('T')[0];
+      setTargetDate(nowFormatted);
+      setTodayStr(nowFormatted);
+
+      const updateTimeLine = () => {
+        const now = new Date();
+        const h = now.getHours();
+        const m = now.getMinutes();
+        if (h >= 6 && h <= 23) {
+          setCurrentMinutesFrom6AM((h - 6) * 60 + m);
+        } else {
+          setCurrentMinutesFrom6AM(-1);
+        }
+      };
+      updateTimeLine();
+      const timer = setInterval(updateTimeLine, 60000);
+      return () => clearInterval(timer);
+    }
   }, []);
 
-  // 타임블록 데이터 로드 (DB 직결)
   const fetchBlocks = async (dateStr: string) => {
     try {
       setLoading(true);
@@ -81,7 +85,6 @@ export default function PlannerPage() {
     fetchBlocks(targetDate);
   }, [targetDate]);
 
-  // 블록 추가 (DB 즉시 반영)
   const handleAddBlock = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = title.trim();
@@ -113,7 +116,6 @@ export default function PlannerPage() {
     }
   };
 
-  // 블록 삭제 (DB 즉시 반영)
   const handleDeleteBlock = async (id: number) => {
     if (!confirm('이 타임블록을 삭제하시겠습니까?')) return;
     setBlocks((prev) => prev.filter((b) => b.id !== id));
@@ -127,7 +129,6 @@ export default function PlannerPage() {
 
   return (
     <div className="min-h-screen bg-[#090b10] text-[#c9d1d9] font-mono selection:bg-[#238636] selection:text-white p-4 md:p-8">
-      {/* 헤더 바 */}
       <header className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center gap-3">
           <Link href="/" className="text-xs text-[#58a6ff] hover:underline font-bold">
@@ -142,7 +143,6 @@ export default function PlannerPage() {
           </span>
         </div>
 
-        {/* 날짜 선택기 */}
         <div className="flex items-center gap-2 text-xs">
           <span className="text-[#8b949e]">TARGET_DATE:</span>
           <input
@@ -154,7 +154,6 @@ export default function PlannerPage() {
         </div>
       </header>
 
-      {/* 블록 등록 패널 */}
       <div className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg mb-6 shadow-lg">
         <form onSubmit={handleAddBlock} className="flex flex-col sm:flex-row gap-2 items-center text-xs">
           <input
@@ -219,7 +218,6 @@ export default function PlannerPage() {
         </form>
       </div>
 
-      {/* 타임라인 캔버스 (06:00 ~ 24:00) */}
       <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
         <div className="flex items-center justify-between border-b border-[#30363d] pb-3 mb-4">
           <span className="text-xs font-bold text-white uppercase tracking-wider">
@@ -234,7 +232,6 @@ export default function PlannerPage() {
           <div className="text-center py-16 text-xs text-[#8b949e]">타임라인 로딩 중...</div>
         ) : (
           <div className="relative border-l border-[#30363d] ml-16 space-y-4 py-2">
-            {/* 현재 시간 빨간 선 인디케이터 */}
             {targetDate === todayStr && currentMinutesFrom6AM >= 0 && (
               <div
                 style={{ top: `${(currentMinutesFrom6AM / 60) * 64}px` }}
@@ -247,21 +244,17 @@ export default function PlannerPage() {
               </div>
             )}
 
-            {/* 시간 눈금 그리드 (매 1시간마다 높이 64px) */}
             {HOURS.map((h) => {
               const matchedBlocks = blocks.filter((b) => b.start_hour === h);
 
               return (
                 <div key={h} className="relative h-14 flex items-center group">
-                  {/* 좌측 시간 라벨 */}
                   <div className="absolute -left-16 text-[11px] font-bold font-mono text-[#8b949e] w-12 text-right pr-2">
                     {String(h).padStart(2, '0')}:00
                   </div>
 
-                  {/* 수평 보조선 */}
                   <div className="absolute left-0 right-0 border-b border-[#21262d] group-hover:border-[#30363d] pointer-events-none" />
 
-                  {/* 해당 시간에 배치된 블록들 */}
                   <div className="relative z-10 flex flex-wrap gap-2 w-full pl-3">
                     {matchedBlocks.map((b) => {
                       const cat = CATEGORY_MAP[b.category] || CATEGORY_MAP.STUDY;

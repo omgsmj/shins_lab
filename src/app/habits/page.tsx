@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -15,6 +17,13 @@ interface HabitLog {
   completed_date: string;
 }
 
+interface DayItem {
+  dateStr: string;
+  display: string;
+  dayName: string;
+  isToday: boolean;
+}
+
 const CATEGORIES = [
   { key: 'HEALTH', label: 'HEALTH', color: 'text-[#7ee787] border-[#238636] bg-[#238636]/20' },
   { key: 'STUDY', label: 'STUDY', color: 'text-[#58a6ff] border-[#1f6feb] bg-[#1f6feb]/20' },
@@ -26,36 +35,40 @@ export default function HabitsPage() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [logs, setLogs] = useState<HabitLog[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [recentDays, setRecentDays] = useState<DayItem[]>([]);
+  const [todayStr, setTodayStr] = useState<string>('2026-10-26');
 
-  // 새 습관 추가 입력 상태
   const [newTitle, setNewTitle] = useState<string>('');
   const [newCategory, setNewCategory] = useState<string>('HEALTH');
 
-  // 최근 7일 날짜 배열 생성 (오늘이 맨 끝)
-  const today = new Date();
-  const recentDays = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(today.getDate() - (6 - i));
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    const dateStr = `${yyyy}-${mm}-${dd}`;
+  useEffect(() => {
+    // 마운트 시점에 안전하게 날짜 배열 구성
+    const today = new Date();
     const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-    return {
-      dateStr,
-      display: `${d.getMonth() + 1}/${d.getDate()}`,
-      dayName: dayNames[d.getDay()],
-      isToday: i === 6,
-    };
-  });
 
-  const todayStr = recentDays[6].dateStr;
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(today.getDate() - (6 - i));
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+      return {
+        dateStr,
+        display: `${d.getMonth() + 1}/${d.getDate()}`,
+        dayName: dayNames[d.getDay()],
+        isToday: i === 6,
+      };
+    });
 
-  // DB 실시간 데이터 로드
+    setRecentDays(days);
+    setTodayStr(days[6].dateStr);
+    fetchHabitsAndLogs();
+  }, []);
+
   const fetchHabitsAndLogs = async () => {
     try {
       setLoading(true);
-      // 1. 습관 목록
       const { data: hData, error: hError } = await supabase
         .from('user_habits')
         .select('*')
@@ -63,9 +76,8 @@ export default function HabitsPage() {
 
       if (hError) throw hError;
 
-      // 2. 최근 30일간의 로그 조회
       const startDate = new Date();
-      startDate.setDate(today.getDate() - 30);
+      startDate.setDate(startDate.getDate() - 30);
       const startStr = startDate.toISOString().split('T')[0];
 
       const { data: lData, error: lError } = await supabase
@@ -84,18 +96,11 @@ export default function HabitsPage() {
     }
   };
 
-  useEffect(() => {
-    fetchHabitsAndLogs();
-  }, []);
-
-  // 습관 체크/체크해제 토글 (DB 즉시 반영)
   const handleToggleLog = async (habitId: number, dateStr: string) => {
     const isCompleted = logs.some((l) => l.habit_id === habitId && l.completed_date === dateStr);
 
     if (isCompleted) {
-      // 1. 화면 즉시 해제 (낙관적 UI)
       setLogs((prev) => prev.filter((l) => !(l.habit_id === habitId && l.completed_date === dateStr)));
-      // 2. DB 삭제
       const { error } = await supabase
         .from('user_habit_logs')
         .delete()
@@ -108,9 +113,7 @@ export default function HabitsPage() {
         alert(`DB 반영 실패: ${error.message}`);
       }
     } else {
-      // 1. 화면 즉시 체크
       setLogs((prev) => [...prev, { habit_id: habitId, completed_date: dateStr }]);
-      // 2. DB 추가
       const { error } = await supabase
         .from('user_habit_logs')
         .insert({ habit_id: habitId, completed_date: dateStr });
@@ -123,7 +126,6 @@ export default function HabitsPage() {
     }
   };
 
-  // 새 습관 추가 (DB 즉시 반영)
   const handleAddHabit = async (e: React.FormEvent) => {
     e.preventDefault();
     const titleTrim = newTitle.trim();
@@ -146,7 +148,6 @@ export default function HabitsPage() {
     }
   };
 
-  // 습관 삭제 (DB 즉시 반영)
   const handleDeleteHabit = async (id: number) => {
     if (!confirm('이 습관과 모든 달성 기록을 영구 삭제하시겠습니까?')) return;
 
@@ -160,17 +161,14 @@ export default function HabitsPage() {
     setLogs((prev) => prev.filter((l) => l.habit_id !== id));
   };
 
-  // 연속 달성 스트릭(Streak) 계산 유틸리티
   const calculateStreak = (habitId: number) => {
     let streak = 0;
     const checkDate = new Date();
 
-    // 오늘 체크했는지 확인
     const todayFormatted = checkDate.toISOString().split('T')[0];
     const isTodayDone = logs.some((l) => l.habit_id === habitId && l.completed_date === todayFormatted);
 
     if (!isTodayDone) {
-      // 오늘 안 했으면 어제부터 거슬러 올라감
       checkDate.setDate(checkDate.getDate() - 1);
     }
 
@@ -192,7 +190,6 @@ export default function HabitsPage() {
     return streak;
   };
 
-  // 오늘 전체 달성률
   const todayDoneCount = habits.filter((h) =>
     logs.some((l) => l.habit_id === h.id && l.completed_date === todayStr)
   ).length;
@@ -200,7 +197,6 @@ export default function HabitsPage() {
 
   return (
     <div className="min-h-screen bg-[#090b10] text-[#c9d1d9] font-mono selection:bg-[#238636] selection:text-white p-4 md:p-8">
-      {/* 상단 헤더 */}
       <header className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center gap-3">
           <Link href="/" className="text-xs text-[#58a6ff] hover:underline font-bold">
@@ -225,7 +221,6 @@ export default function HabitsPage() {
         </div>
       </header>
 
-      {/* 상단 통계 바 */}
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg shadow">
           <div className="text-[10px] text-[#8b949e] uppercase mb-1">TODAY_COMPLETION</div>
@@ -258,7 +253,6 @@ export default function HabitsPage() {
         </div>
       </section>
 
-      {/* 습관 추가 폼 */}
       <div className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg mb-6 shadow-lg">
         <form onSubmit={handleAddHabit} className="flex flex-col sm:flex-row gap-2 items-center text-xs">
           <select
@@ -288,7 +282,6 @@ export default function HabitsPage() {
         </form>
       </div>
 
-      {/* 7일 매트릭스 보드 테이블 */}
       <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg overflow-x-auto">
         <div className="flex items-center justify-between border-b border-[#30363d] pb-3 mb-4 min-w-[640px]">
           <span className="text-xs font-bold text-white uppercase tracking-wider">
@@ -307,7 +300,6 @@ export default function HabitsPage() {
           </div>
         ) : (
           <div className="min-w-[640px] space-y-2">
-            {/* 날짜 헤더 행 */}
             <div className="grid grid-cols-12 gap-2 pb-2 border-b border-[#21262d] text-xs text-[#8b949e] font-bold text-center items-center">
               <div className="col-span-4 text-left pl-2">HABIT_TITLE</div>
               <div className="col-span-1">STREAK</div>
@@ -319,7 +311,6 @@ export default function HabitsPage() {
               ))}
             </div>
 
-            {/* 개별 습관 행 */}
             {habits.map((h) => {
               const streak = calculateStreak(h.id);
               const catInfo = CATEGORIES.find((c) => c.key === h.category) || CATEGORIES[0];
@@ -329,7 +320,6 @@ export default function HabitsPage() {
                   key={h.id}
                   className="grid grid-cols-12 gap-2 p-2.5 rounded bg-[#0d1117] border border-[#21262d] text-xs items-center hover:border-[#30363d] transition group"
                 >
-                  {/* 제목 및 카테고리 */}
                   <div className="col-span-4 flex items-center justify-between pr-2">
                     <div className="flex items-center gap-2 truncate">
                       <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold border ${catInfo.color}`}>
@@ -345,12 +335,10 @@ export default function HabitsPage() {
                     </button>
                   </div>
 
-                  {/* 연속 달성 스트릭 */}
                   <div className="col-span-1 text-center font-bold font-mono text-[#d2a8ff]">
                     {streak > 0 ? `🔥${streak}` : '-'}
                   </div>
 
-                  {/* 최근 7일 체크박스 블록 */}
                   {recentDays.map((d) => {
                     const isDone = logs.some((l) => l.habit_id === h.id && l.completed_date === d.dateStr);
 
