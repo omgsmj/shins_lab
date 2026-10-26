@@ -11,12 +11,29 @@ interface ScheduleItem {
   category: 'DEV' | 'ACADEMIC' | 'PERSONAL';
 }
 
+interface UserProfile {
+  name: string;
+  affiliation: string;
+  specialization: string;
+  coreStack: string;
+}
+
 export default function EngineeringHub() {
-  // 1. 시스템 텔레메트리 상태
+  // 1. 시스템 텔레메트리 & 실시간 날씨
   const [timeStr, setTimeStr] = useState<string>('');
   const [uptime, setUptime] = useState<number>(0);
+  const [weatherStr, setWeatherStr] = useState<string>('WEATHER SYNCING...');
 
-  // 2. 인증 및 프로필/자소서 금고 상태
+  // 2. 대표 프로필 정보 (홈페이지 내 편집 지원)
+  const [profile, setProfile] = useState<UserProfile>({
+    name: '신민종 (SHIN MINJONG)',
+    affiliation: '전주대학교 (Senior)',
+    specialization: '인공지능학 × 일본언어문화학',
+    coreStack: 'Python, OpenCV, Next.js, TypeScript',
+  });
+  const [isEditingProfile, setIsEditingProfile] = useState<boolean>(false);
+
+  // 3. 인증 및 자소서 금고
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [passcode, setPasscode] = useState<string>('');
   const [authError, setAuthError] = useState<boolean>(false);
@@ -28,23 +45,23 @@ export default function EngineeringHub() {
 - 실패를 숨기지 않는 방어적 프로그래밍과 데이터 무손실 파싱 지향.`
   );
 
-  // 3. 달력 및 일정 상태
+  // 4. 달력 및 일정 상태
   const [schedules, setSchedules] = useState<ScheduleItem[]>([
-    { id: 1, date: '2026-10-26', title: '정보처리기사 CBT 엔진 빌드 및 검증', category: 'DEV' },
-    { id: 2, date: '2026-10-28', title: '졸업 프로젝트 인공지능 파이프라인 통합 테스트', category: 'ACADEMIC' },
-    { id: 3, date: '2026-11-05', title: '취업용 포트폴리오 및 기술 자소서 1차 탈고', category: 'DEV' },
+    { id: 1, date: '2026-10-26', title: '정보처리기사 CBT 엔진 빌드', category: 'DEV' },
+    { id: 2, date: '2026-10-28', title: 'AI 파이프라인 통합 테스트', category: 'ACADEMIC' },
+    { id: 3, date: '2026-11-05', title: '기술 자소서 1차 탈고', category: 'DEV' },
   ]);
   const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 9, 26)); // 기준: 2026년 10월
   const [newTitle, setNewTitle] = useState<string>('');
   const [newDate, setNewDate] = useState<string>('2026-10-26');
   const [newCategory, setNewCategory] = useState<'DEV' | 'ACADEMIC' | 'PERSONAL'>('DEV');
 
-  // 4. 스크래치패드 상태
+  // 5. 스크래치패드
   const [scratchpad, setScratchpad] = useState<string>(
     '// QUICK SCRATCHPAD (Auto-saved)\n$ python -m venv venv\n$ pip install -r requirements.txt'
   );
 
-  // 텔레메트리 타이머
+  // 시계 타이머
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -61,16 +78,55 @@ export default function EngineeringHub() {
     return () => clearInterval(timer);
   }, []);
 
+  // 전주시(위도 35.8242, 경도 127.148) 실시간 날씨 페칭 (Open-Meteo)
+  useEffect(() => {
+    const fetchJeonjuWeather = async () => {
+      try {
+        const res = await fetch(
+          'https://api.open-meteo.com/v1/forecast?latitude=35.8242&longitude=127.148&current=temperature_2m,weather_code,wind_speed_10m'
+        );
+        const data = await res.json();
+        if (data && data.current) {
+          const temp = data.current.temperature_2m;
+          const wind = data.current.wind_speed_10m;
+          const code = data.current.weather_code;
+          let weatherDesc = 'CLEAR';
+          if (code >= 1 && code <= 3) weatherDesc = 'CLOUDY';
+          else if (code >= 51 && code <= 67) weatherDesc = 'RAIN';
+          else if (code >= 71 && code <= 77) weatherDesc = 'SNOW';
+
+          setWeatherStr(`${temp}°C (${weatherDesc}, ${wind}km/h)`);
+        }
+      } catch (err) {
+        setWeatherStr('WEATHER OFFLINE');
+      }
+    };
+    fetchJeonjuWeather();
+  }, []);
+
+  // 로컬 저장된 프로필 복원
+  useEffect(() => {
+    const saved = localStorage.getItem('station_user_profile');
+    if (saved) {
+      try {
+        setProfile(JSON.parse(saved));
+      } catch (e) {}
+    }
+  }, []);
+
   // Supabase 일정 불러오기
   useEffect(() => {
     const fetchSchedules = async () => {
       try {
-        const { data, error } = await supabase.from('user_schedules').select('*').order('date', { ascending: true });
+        const { data, error } = await supabase
+          .from('user_schedules')
+          .select('*')
+          .order('date', { ascending: true });
         if (!error && data && data.length > 0) {
           setSchedules(data);
         }
       } catch (err) {
-        console.warn('Supabase offline, using local memory.');
+        console.warn('Supabase offline, using local state.');
       }
     };
     fetchSchedules();
@@ -85,6 +141,12 @@ export default function EngineeringHub() {
     } else {
       setAuthError(true);
     }
+  };
+
+  const handleSaveProfile = () => {
+    localStorage.setItem('station_user_profile', JSON.stringify(profile));
+    setIsEditingProfile(false);
+    alert('프로필 변경 사항이 저장되었습니다.');
   };
 
   const handleAddSchedule = async (e: React.FormEvent) => {
@@ -108,7 +170,7 @@ export default function EngineeringHub() {
         category: newCategory,
       });
     } catch (err) {
-      console.warn('DB insert fallback to local state');
+      console.warn('DB insert fallback');
     }
   };
 
@@ -130,20 +192,23 @@ export default function EngineeringHub() {
 
   return (
     <div className="min-h-screen bg-[#090b10] text-[#c9d1d9] font-mono selection:bg-[#238636] selection:text-white p-4 md:p-8">
-      {/* 1. 최상단 엔지니어링 헤더 & 텔레메트리 바 */}
+      {/* 1. 최상단 엔지니어링 헤더 & 날씨 텔레메트리 바 */}
       <header className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center gap-3">
           <div className="h-3 w-3 rounded-full bg-[#238636] animate-pulse" />
           <span className="text-sm font-bold text-white tracking-widest uppercase">
-            STATION_TERMINAL :: MINJONG_SHIN
+            STATION_TERMINAL :: {profile.name.split(' ')[0]}
           </span>
           <span className="text-xs px-2 py-0.5 rounded bg-[#21262d] text-[#8b949e] border border-[#30363d]">
-            ENV: PRODUCTION (v2.4.0)
+            ENV: PRODUCTION (v2.5.0)
           </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-4 text-xs text-[#8b949e]">
-          <div>LOC: <span className="text-[#58a6ff]">JEONJU-SI (35.82°N, 127.14°E)</span></div>
+          <div>
+            LOC: <span className="text-[#58a6ff]">JEONJU-SI</span>{' '}
+            <span className="text-[#e3b341] font-bold">[{weatherStr}]</span>
+          </div>
           <div>KST: <span className="text-[#7ee787] font-bold">{timeStr || 'SYNCING...'}</span></div>
           <div>UPTIME: <span className="text-white font-bold">{uptime}s</span></div>
         </div>
@@ -211,7 +276,7 @@ export default function EngineeringHub() {
               </div>
             </div>
 
-            {/* 월간 그리드 */}
+            {/* 월간 그리드 (일정 텍스트 직접 노출) */}
             <div className="grid grid-cols-7 gap-1 text-center text-xs mb-4">
               {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day, idx) => (
                 <div key={day} className={`font-bold py-1 ${idx === 0 ? 'text-[#f85149]' : 'text-[#8b949e]'}`}>
@@ -219,35 +284,49 @@ export default function EngineeringHub() {
                 </div>
               ))}
               {Array.from({ length: firstDayIndex }).map((_, i) => (
-                <div key={`empty-${i}`} className="h-14 border border-transparent" />
+                <div key={`empty-${i}`} className="min-h-[72px] border border-transparent" />
               ))}
               {daysArray.map((d) => {
                 const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                const hasSchedule = schedules.some((s) => s.date === dateKey);
-                const isToday = d === 26 && month === 9; // 10월 26일 오늘 하이라이트
+                const matchedSchedules = schedules.filter((s) => s.date === dateKey);
+                const isToday = d === 26 && month === 9; // 오늘 강조
 
                 return (
                   <div
                     key={d}
                     onClick={() => setNewDate(dateKey)}
-                    className={`h-14 border rounded p-1 text-left flex flex-col justify-between cursor-pointer transition ${
+                    className={`min-h-[72px] border rounded p-1 text-left flex flex-col justify-start cursor-pointer transition overflow-hidden ${
                       isToday
                         ? 'border-[#58a6ff] bg-[#58a6ff]/10 font-bold text-white'
-                        : hasSchedule
+                        : matchedSchedules.length > 0
                         ? 'border-[#30363d] bg-[#21262d]/60 text-[#c9d1d9]'
                         : 'border-[#21262d] bg-[#0d1117]/50 text-[#8b949e] hover:border-[#30363d]'
                     }`}
                   >
-                    <span className="text-[10px]">{d}</span>
-                    {hasSchedule && (
-                      <div className="w-2 h-2 rounded-full bg-[#7ee787] self-end mb-1" />
-                    )}
+                    <span className="text-[10px] mb-1 font-mono">{d}</span>
+                    <div className="space-y-1 w-full">
+                      {matchedSchedules.map((s) => (
+                        <div
+                          key={s.id}
+                          title={s.title}
+                          className={`text-[9px] px-1 py-0.5 rounded truncate font-sans ${
+                            s.category === 'DEV'
+                              ? 'bg-[#238636]/30 text-[#7ee787] border border-[#238636]/50'
+                              : s.category === 'ACADEMIC'
+                              ? 'bg-[#1f6feb]/30 text-[#58a6ff] border border-[#1f6feb]/50'
+                              : 'bg-[#a371f7]/30 text-[#d2a8ff] border border-[#a371f7]/50'
+                          }`}
+                        >
+                          {s.title}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 );
               })}
             </div>
 
-            {/* 일정 추가 컨트롤러 */}
+            {/* 일정 추가 폼 */}
             <form onSubmit={handleAddSchedule} className="pt-3 border-t border-[#30363d] flex flex-col sm:flex-row gap-2">
               <input
                 type="date"
@@ -280,7 +359,7 @@ export default function EngineeringHub() {
             </form>
           </div>
 
-          {/* 등록된 일정 텔레메트리 리스트 */}
+          {/* 등록된 일정 큐 리스트 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="text-xs font-bold text-[#8b949e] uppercase mb-3">SCHEDULED_EVENTS_QUEUE</div>
             <div className="space-y-2">
@@ -316,33 +395,85 @@ export default function EngineeringHub() {
           </div>
         </section>
 
-        {/* [우측 5열]: 대표소개 & 보안 자소서 락커 */}
+        {/* [우측 5열]: 대표소개 & 인라인 정보 편집 & 자소서 금고 */}
         <section className="lg:col-span-5 space-y-6">
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-3 mb-4">
               <span className="text-sm font-bold text-white tracking-wider">ENGINEER_DOSSIER</span>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-[#238636]/20 text-[#7ee787] border border-[#238636]/40">
-                ACTIVE CHIEF
-              </span>
+              <div className="flex items-center gap-2">
+                {isAuthenticated && (
+                  <button
+                    onClick={() => {
+                      if (isEditingProfile) handleSaveProfile();
+                      else setIsEditingProfile(true);
+                    }}
+                    className="text-[10px] px-2 py-0.5 rounded border border-[#58a6ff] text-[#58a6ff] hover:bg-[#58a6ff]/20 font-bold transition"
+                  >
+                    {isEditingProfile ? 'SAVE_PROFILE' : 'EDIT_PROFILE'}
+                  </button>
+                )}
+                <span className="text-[10px] px-2 py-0.5 rounded bg-[#238636]/20 text-[#7ee787] border border-[#238636]/40">
+                  ACTIVE CHIEF
+                </span>
+              </div>
             </div>
 
-            {/* 대표 프로필 카드 */}
+            {/* 대표 프로필 (편집 모드 지원) */}
             <div className="space-y-3 text-xs mb-5">
-              <div className="flex justify-between border-b border-[#21262d] pb-2">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-[#21262d] pb-2 gap-1">
                 <span className="text-[#8b949e]">OPERATOR:</span>
-                <span className="text-white font-bold">신민종 (SHIN MINJONG)</span>
+                {isEditingProfile ? (
+                  <input
+                    type="text"
+                    value={profile.name}
+                    onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                    className="bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-white text-xs"
+                  />
+                ) : (
+                  <span className="text-white font-bold">{profile.name}</span>
+                )}
               </div>
-              <div className="flex justify-between border-b border-[#21262d] pb-2">
+
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-[#21262d] pb-2 gap-1">
                 <span className="text-[#8b949e]">AFFILIATION:</span>
-                <span className="text-[#c9d1d9]">전주대학교 (Senior)</span>
+                {isEditingProfile ? (
+                  <input
+                    type="text"
+                    value={profile.affiliation}
+                    onChange={(e) => setProfile({ ...profile, affiliation: e.target.value })}
+                    className="bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-white text-xs"
+                  />
+                ) : (
+                  <span className="text-[#c9d1d9]">{profile.affiliation}</span>
+                )}
               </div>
-              <div className="flex justify-between border-b border-[#21262d] pb-2">
+
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-[#21262d] pb-2 gap-1">
                 <span className="text-[#8b949e]">SPECIALIZATION:</span>
-                <span className="text-[#7ee787]">인공지능학 × 일본언어문화학</span>
+                {isEditingProfile ? (
+                  <input
+                    type="text"
+                    value={profile.specialization}
+                    onChange={(e) => setProfile({ ...profile, specialization: e.target.value })}
+                    className="bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-white text-xs"
+                  />
+                ) : (
+                  <span className="text-[#7ee787]">{profile.specialization}</span>
+                )}
               </div>
-              <div className="flex justify-between border-b border-[#21262d] pb-2">
+
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center border-b border-[#21262d] pb-2 gap-1">
                 <span className="text-[#8b949e]">CORE_STACK:</span>
-                <span className="text-[#58a6ff]">Python, OpenCV, Next.js, TS</span>
+                {isEditingProfile ? (
+                  <input
+                    type="text"
+                    value={profile.coreStack}
+                    onChange={(e) => setProfile({ ...profile, coreStack: e.target.value })}
+                    className="bg-[#0d1117] border border-[#30363d] rounded px-2 py-1 text-white text-xs"
+                  />
+                ) : (
+                  <span className="text-[#58a6ff]">{profile.coreStack}</span>
+                )}
               </div>
             </div>
 
@@ -357,7 +488,10 @@ export default function EngineeringHub() {
                 </div>
                 {isAuthenticated && (
                   <button
-                    onClick={() => setIsAuthenticated(false)}
+                    onClick={() => {
+                      setIsAuthenticated(false);
+                      setIsEditingProfile(false);
+                    }}
                     className="text-[10px] text-[#f85149] hover:underline"
                   >
                     LOCK_NOW
@@ -368,7 +502,7 @@ export default function EngineeringHub() {
               {!isAuthenticated ? (
                 <form onSubmit={handleLogin} className="space-y-3">
                   <p className="text-[11px] text-[#8b949e] leading-relaxed">
-                    본 구역은 대표 전용 보안 저장소입니다. 암호화된 자기소개서 및 커리어 명세서를 열람하려면 패스코드를 입력하십시오.
+                    본 구역은 대표 전용 보안 저장소입니다. 프로필 편집 및 암호화된 자기소개서를 열람하려면 패스코드를 입력하십시오.
                   </p>
                   <div className="flex gap-2">
                     <input
@@ -414,7 +548,7 @@ export default function EngineeringHub() {
             </div>
           </div>
 
-          {/* 선탑재 추가 기능: 엔지니어링 스크래치패드 */}
+          {/* 엔지니어링 스크래치패드 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-[#8b949e] uppercase">SCRATCHPAD (CLI_NOTES)</span>
