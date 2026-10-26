@@ -2,21 +2,24 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
+
+interface QuestionData {
+  id: number;
+  session?: number;
+  number?: number;
+  subject?: string;
+  question: string;
+  options: string[];
+  answer: number;
+  explanation?: string;
+}
 
 interface WrongItem {
   id: number;
   question_id: number;
   user_answer: number;
-  question: {
-    id: number;
-    session: number;
-    number: number;
-    subject: string;
-    question: string;
-    options: string[];
-    answer: number;
-    explanation?: string;
-  };
+  question: QuestionData;
 }
 
 interface ExamHistory {
@@ -35,20 +38,39 @@ export default function CBTNotesPage() {
   const [wrongItems, setWrongItems] = useState<WrongItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // P2: 다시 풀기 연습 모드 상태
+  // 다시 풀기 모드 상태
   const [practiceMode, setPracticeMode] = useState<boolean>(false);
   const [practiceAnswers, setPracticeAnswers] = useState<Record<number, number>>({});
   const [revealedExplanations, setRevealedExplanations] = useState<Set<number>>(new Set());
 
+  // 1. 응시 이력 폴더 목록 조회 (Supabase 직결)
   const fetchHistories = async () => {
     try {
-      const res = await fetch('/api/cbt/notes/folders');
-      const json = await res.json();
-      if (json.success && Array.isArray(json.data)) {
-        setHistories(json.data);
-        if (json.data.length > 0 && !selectedHistoryId) {
-          setSelectedHistoryId(json.data[0].id);
-        }
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('cbt_exam_histories')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('이력 목록 조회 에러:', error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const mapped: ExamHistory[] = data.map((h) => ({
+          id: h.id,
+          folder_name: h.folder_name || `${h.session || 1}회차 기출 모의고사`,
+          session: h.session || 1,
+          score: h.score || 0,
+          is_passed: Boolean(h.is_passed),
+          time_spent: h.time_spent || 0,
+          created_at: h.created_at,
+        }));
+        setHistories(mapped);
+        setSelectedHistoryId((prev) => prev || mapped[0].id);
+      } else {
+        setHistories([]);
       }
     } catch (err) {
       console.error('기록 목록 조회 실패:', err);
@@ -57,12 +79,78 @@ export default function CBTNotesPage() {
     }
   };
 
+  // 2. 특정 시험의 오답 목록 조회 (Supabase 직결)
   const fetchWrongItems = async (historyId: number) => {
     try {
-      const res = await fetch(`/api/cbt/notes?historyId=${historyId}`);
-      const json = await res.json();
-      if (json.success && Array.isArray(json.data)) {
-        setWrongItems(json.data);
+      const { data, error } = await supabase
+        .from('cbt_wrong_answers')
+        .select(`
+          id,
+          question_id,
+          user_answer,
+          cbt_questions (
+            id,
+            session,
+            number,
+            subject,
+            question,
+            options,
+            answer,
+            explanation
+          )
+        `)
+        .eq('history_id', historyId)
+        .order('id', { ascending: true });
+
+      if (error) {
+        // 단일 테이블 구조이거나 외래키 조인이 안 걸려있을 경우 폴백 쿼리
+        const { data: fallbackData, error: fbError } = await supabase
+          .from('cbt_wrong_answers')
+          .select('*')
+          .eq('history_id', historyId)
+          .order('id', { ascending: true });
+
+        if (!fbError && fallbackData) {
+          const items: WrongItem[] = fallbackData.map((item: any) => ({
+            id: item.id,
+            question_id: item.question_id || item.id,
+            user_answer: item.user_answer || 0,
+            question: {
+              id: item.question_id || item.id,
+              session: item.session || 1,
+              number: item.number || 1,
+              subject: item.subject || '공통과목',
+              question: item.question || '문제 내용을 불러올 수 없습니다.',
+              options: Array.isArray(item.options) ? item.options : [],
+              answer: item.answer || item.correct_answer || 1,
+              explanation: item.explanation || '',
+            },
+          }));
+          setWrongItems(items);
+        }
+        return;
+      }
+
+      if (data) {
+        const items: WrongItem[] = data.map((item: any) => {
+          const q = item.cbt_questions || {};
+          return {
+            id: item.id,
+            question_id: item.question_id,
+            user_answer: item.user_answer,
+            question: {
+              id: q.id || item.question_id,
+              session: q.session || 1,
+              number: q.number || 1,
+              subject: q.subject || '소프트웨어 설계',
+              question: q.question || item.question || '문제를 불러오는 중...',
+              options: Array.isArray(q.options) ? q.options : (item.options || []),
+              answer: q.answer || item.correct_answer || 1,
+              explanation: q.explanation || item.explanation || '',
+            },
+          };
+        });
+        setWrongItems(items);
         setPracticeAnswers({});
         setRevealedExplanations(new Set());
       }
@@ -81,10 +169,19 @@ export default function CBTNotesPage() {
     }
   }, [selectedHistoryId]);
 
-  // P2: 오답 숙지 완료 (졸업/보관함에서 삭제)
-  const handleRemoveWrongItem = (id: number) => {
-    if (confirm('이 문제를 완전히 숙지하셨습니까? 오답노트 목록에서 제거합니다.')) {
-      setWrongItems((prev) => prev.filter((item) => item.id !== id));
+  // 오답 숙지 완료 (DB에서 실제 삭제)
+  const handleRemoveWrongItem = async (id: number) => {
+    if (!confirm('이 문제를 완전히 숙지하셨습니까? 오답노트 보관함에서 영구 제거합니다.')) return;
+
+    setWrongItems((prev) => prev.filter((item) => item.id !== id));
+
+    try {
+      const { error } = await supabase.from('cbt_wrong_answers').delete().eq('id', id);
+      if (error) {
+        console.error('오답 삭제 실패:', error.message);
+      }
+    } catch (err) {
+      console.error('오답 삭제 통신 에러:', err);
     }
   };
 
@@ -98,21 +195,21 @@ export default function CBTNotesPage() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 font-sans">
+    <div className="flex h-screen bg-[#090b10] text-[#c9d1d9] font-mono selection:bg-[#238636] selection:text-white">
       {/* 좌측: 응시 이력 폴더 목록 */}
-      <aside className="w-80 border-r border-slate-800 bg-slate-900/40 p-4 flex flex-col">
-        <div className="mb-4 flex items-center justify-between border-b border-slate-800 pb-3">
-          <Link href="/cbt" className="text-xs text-blue-400 hover:underline">
+      <aside className="w-80 border-r border-[#30363d] bg-[#161b22] p-4 flex flex-col">
+        <div className="mb-4 flex items-center justify-between border-b border-[#30363d] pb-3">
+          <Link href="/cbt" className="text-xs text-[#58a6ff] hover:underline font-bold">
             ← CBT 시험장으로
           </Link>
-          <span className="text-xs font-bold text-slate-400">오답노트 보관함</span>
+          <span className="text-xs font-bold text-[#8b949e]">오답 보관소</span>
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-2">
+        <div className="flex-1 overflow-y-auto space-y-2 pr-1">
           {loading ? (
-            <div className="text-xs text-slate-500 text-center py-8">이력 로딩 중...</div>
+            <div className="text-xs text-[#8b949e] text-center py-8">이력 동기화 중...</div>
           ) : histories.length === 0 ? (
-            <div className="text-xs text-slate-500 text-center py-8">응시한 시험 이력이 없습니다.</div>
+            <div className="text-xs text-[#8b949e] text-center py-8">응시한 시험 이력이 없습니다.</div>
           ) : (
             histories.map((h) => (
               <button
@@ -120,16 +217,16 @@ export default function CBTNotesPage() {
                 onClick={() => setSelectedHistoryId(h.id)}
                 className={`w-full text-left p-3 rounded-lg border text-xs transition ${
                   selectedHistoryId === h.id
-                    ? 'border-indigo-500 bg-indigo-950/40 text-white'
-                    : 'border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-300'
+                    ? 'border-[#58a6ff] bg-[#1f6feb]/20 text-white shadow-lg'
+                    : 'border-[#30363d] bg-[#0d1117] hover:bg-[#21262d] text-[#c9d1d9]'
                 }`}
               >
-                <div className="font-semibold text-slate-200 truncate">{h.folder_name}</div>
-                <div className="mt-1 flex items-center justify-between text-[11px] text-slate-400">
-                  <span className={h.is_passed ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                <div className="font-semibold text-white truncate">{h.folder_name}</div>
+                <div className="mt-1 flex items-center justify-between text-[11px] text-[#8b949e]">
+                  <span className={h.is_passed ? 'text-[#7ee787] font-bold' : 'text-[#f85149] font-bold'}>
                     {h.score}점 ({h.is_passed ? '합격' : '불합격'})
                   </span>
-                  <span>{new Date(h.created_at).toLocaleDateString()}</span>
+                  <span>{new Date(h.created_at).toLocaleDateString('ko-KR')}</span>
                 </div>
               </button>
             ))
@@ -137,20 +234,20 @@ export default function CBTNotesPage() {
         </div>
       </aside>
 
-      {/* 우측: 오답 목록 및 P2 다시 풀기 연습 인터페이스 */}
+      {/* 우측: 오답 상세 목록 및 다시 풀기 모드 */}
       <main className="flex-1 overflow-y-auto p-8">
         <div className="mx-auto max-w-4xl space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center justify-between border-b border-[#30363d] pb-4">
             <div>
-              <h1 className="text-xl font-bold text-white">
+              <h1 className="text-lg font-bold text-white tracking-wider">
                 {histories.find((h) => h.id === selectedHistoryId)?.folder_name || '오답 상세 목록'}
               </h1>
-              <p className="text-xs text-slate-400 mt-1">
-                오답 수: <span className="text-rose-400 font-bold">{wrongItems.length}개</span>
+              <p className="text-xs text-[#8b949e] mt-1">
+                남은 오답 수: <span className="text-[#f85149] font-bold">{wrongItems.length}문항</span>
               </p>
             </div>
 
-            {/* P2: 다시 풀기 모드 토글 스위치 */}
+            {/* 다시 풀기 모드 토글 */}
             {wrongItems.length > 0 && (
               <button
                 onClick={() => {
@@ -158,24 +255,24 @@ export default function CBTNotesPage() {
                   setPracticeAnswers({});
                   setRevealedExplanations(new Set());
                 }}
-                className={`px-4 py-2 rounded-lg text-xs font-bold transition border ${
+                className={`px-3 py-1.5 rounded text-xs font-bold transition border ${
                   practiceMode
-                    ? 'border-emerald-500 bg-emerald-600/20 text-emerald-300'
-                    : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-600'
+                    ? 'border-[#238636] bg-[#238636]/20 text-[#7ee787]'
+                    : 'border-[#30363d] bg-[#21262d] text-white hover:bg-[#30363d]'
                 }`}
               >
-                {practiceMode ? ' 일반 검토 모드로 보기' : '🎯 정답 가리고 다시 풀기'}
+                {practiceMode ? '📋 전체 정답/해설 보기' : '🎯 정답 가리고 다시 풀기'}
               </button>
             )}
           </div>
 
           {wrongItems.length === 0 ? (
-            <div className="text-center py-20 text-slate-500 text-sm">
-              틀린 문제가 없거나 오답을 모두 졸업했습니다! 🎉
+            <div className="text-center py-20 text-[#8b949e] text-xs">
+              선택한 시험에 틀린 문제가 없거나 모든 오답을 졸업했습니다! 🎉
             </div>
           ) : (
             <div className="space-y-6">
-              {wrongItems.map((item, idx) => {
+              {wrongItems.map((item) => {
                 const q = item.question;
                 const userChoice = practiceMode ? practiceAnswers[q.id] : item.user_answer;
                 const isAnswerChecked = practiceMode && userChoice !== undefined;
@@ -183,30 +280,31 @@ export default function CBTNotesPage() {
                 const isExplanationOpen = !practiceMode || revealedExplanations.has(q.id);
 
                 return (
-                  <div key={item.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-                      <span className="text-xs font-bold text-blue-400">
-                        [{q.subject}] {q.number}번 문항
+                  <div key={item.id} className="rounded-lg border border-[#30363d] bg-[#161b22] p-5 space-y-4 shadow-lg">
+                    <div className="flex items-center justify-between border-b border-[#21262d] pb-2.5">
+                      <span className="text-xs font-bold text-[#58a6ff]">
+                        [{q.subject || '소프트웨어 설계'}] {q.number ? `${q.number}번` : `문항 #${q.id}`}
                       </span>
                       <div className="flex items-center gap-2">
                         {practiceMode && isAnswerChecked && (
-                          <span className={`text-xs font-bold ${isPracticeCorrect ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {isPracticeCorrect ? ' 정답!' : '❌ 오답'}
+                          <span className={`text-xs font-bold ${isPracticeCorrect ? 'text-[#7ee787]' : 'text-[#f85149]'}`}>
+                            {isPracticeCorrect ? '✓ 정답!' : '❌ 오답'}
                           </span>
                         )}
                         <button
                           onClick={() => handleRemoveWrongItem(item.id)}
-                          className="text-[11px] px-2 py-0.5 rounded border border-slate-700 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/40 transition"
+                          className="text-[10px] px-2 py-0.5 rounded border border-[#30363d] bg-[#0d1117] text-[#8b949e] hover:text-[#7ee787] hover:border-[#238636] transition"
                         >
-                          ✓ 숙지 완료(졸업)
+                          ✓ 숙지 완료(보관함 제거)
                         </button>
                       </div>
                     </div>
 
-                    <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{q.question}</p>
+                    <p className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap font-sans">{q.question}</p>
 
+                    {/* 4지 선다 목록 */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {(q.options || []).map((opt, optIdx) => {
+                      {(q.options && q.options.length > 0 ? q.options : ['보기 1', '보기 2', '보기 3', '보기 4']).map((opt, optIdx) => {
                         const optNum = optIdx + 1;
                         const isSelected = userChoice === optNum;
                         const isRealCorrect = !practiceMode || isAnswerChecked ? q.answer === optNum : false;
@@ -216,36 +314,36 @@ export default function CBTNotesPage() {
                             key={optNum}
                             disabled={!practiceMode}
                             onClick={() => setPracticeAnswers((prev) => ({ ...prev, [q.id]: optNum }))}
-                            className={`flex items-start gap-2.5 p-3 rounded-lg border text-left text-xs transition ${
+                            className={`flex items-start gap-2.5 p-2.5 rounded border text-left text-xs transition ${
                               isSelected
-                                ? 'border-rose-500 bg-rose-950/40 text-rose-200'
-                                : 'border-slate-800 bg-slate-950 text-slate-300'
-                            } ${isRealCorrect ? '!border-emerald-500 !bg-emerald-950/40 !text-emerald-300 font-bold' : ''}`}
+                                ? 'border-[#f85149] bg-rose-950/30 text-rose-200'
+                                : 'border-[#21262d] bg-[#0d1117] text-[#c9d1d9]'
+                            } ${isRealCorrect ? '!border-[#238636] !bg-[#238636]/20 !text-[#7ee787] font-bold' : ''}`}
                           >
-                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-slate-600 text-[10px]">
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-[#30363d] text-[10px]">
                               {optNum}
                             </span>
-                            <span className="flex-1">{opt}</span>
+                            <span className="flex-1 font-sans">{opt}</span>
                           </button>
                         );
                       })}
                     </div>
 
-                    {/* 해설 토글 */}
+                    {/* 해설 및 정답 뷰어 */}
                     {isExplanationOpen ? (
-                      <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 text-xs space-y-1">
-                        <div className="font-bold text-emerald-400">정답: {q.answer}번</div>
-                        <div className="text-slate-300 leading-relaxed">
-                          <span className="text-slate-400 font-semibold">해설: </span>
-                          {q.explanation || '해설이 없습니다.'}
+                      <div className="rounded border border-[#21262d] bg-[#0d1117] p-3 text-xs space-y-1">
+                        <div className="font-bold text-[#7ee787]">정답: {q.answer}번</div>
+                        <div className="text-slate-300 leading-relaxed font-sans">
+                          <span className="text-[#8b949e] font-semibold">해설: </span>
+                          {q.explanation || '등록된 상세 해설이 없습니다.'}
                         </div>
                       </div>
                     ) : (
                       <button
                         onClick={() => toggleRevealExplanation(q.id)}
-                        className="text-xs text-indigo-400 hover:underline"
+                        className="text-xs text-[#58a6ff] hover:underline"
                       >
-                        💡 정답 및 해설 펼쳐보기
+                        💡 정답 및 해설 확인하기
                       </button>
                     )}
                   </div>
