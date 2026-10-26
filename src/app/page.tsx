@@ -228,16 +228,14 @@ export default function EngineeringHub() {
     fetchJeonjuWeather();
   }, []);
 
-  // 1단계: 기존 작성 데이터 100% 즉시 복원 (LocalStorage 우선) + 2단계: Supabase 원격 동기화
+  // 1단계: 로컬 캐시 즉시 화면 복원 + 2단계: Supabase 원격 DB 최신 데이터 동기화
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // 인증 복원
     if (sessionStorage.getItem('station_auth_status') === 'true') {
       setIsAuthenticated(true);
     }
 
-    // 1. 기존 로컬 스토리지 데이터 즉시 화면에 복구
     const savedProfile = localStorage.getItem('station_user_profile');
     if (savedProfile) {
       try { setProfile(JSON.parse(savedProfile)); } catch (e) {}
@@ -270,23 +268,19 @@ export default function EngineeringHub() {
       } catch (e) {}
     }
 
-    // 2. Supabase DB에서 최신 데이터가 있다면 병합/동기화
+    // 원격 Supabase DB 데이터 페칭 (캐시 무효화 및 동기화)
     const syncRemoteData = async () => {
       try {
         const { data: pData } = await supabase.from('user_profiles').select('*').eq('id', 1).maybeSingle();
         if (pData) {
-          setProfile({
+          const remoteProfile: UserProfile = {
             name: pData.name,
             affiliation: pData.affiliation,
             specialization: pData.specialization,
             coreStack: pData.core_stack,
-          });
-          localStorage.setItem('station_user_profile', JSON.stringify({
-            name: pData.name,
-            affiliation: pData.affiliation,
-            specialization: pData.specialization,
-            coreStack: pData.core_stack,
-          }));
+          };
+          setProfile(remoteProfile);
+          localStorage.setItem('station_user_profile', JSON.stringify(remoteProfile));
         }
 
         const { data: gData } = await supabase.from('user_goals').select('*').eq('id', 1).maybeSingle();
@@ -330,7 +324,7 @@ export default function EngineeringHub() {
           localStorage.setItem('station_board_study_logs', JSON.stringify(mappedLogs));
         }
       } catch (err) {
-        console.warn('Supabase sync standby: operating on persistent local storage cache.');
+        console.warn('Supabase DB 대기 중: 로컬 스토리지 모드로 작동');
       }
     };
 
@@ -361,28 +355,29 @@ export default function EngineeringHub() {
     sessionStorage.removeItem('station_auth_status');
   };
 
-  // 프로필 저장 (Local + Supabase 2중 안전 저장)
+  // 프로필 저장
   const handleSaveProfile = async () => {
     playClickSound();
     setIsEditingProfile(false);
     localStorage.setItem('station_user_profile', JSON.stringify(profile));
 
-    try {
-      await supabase.from('user_profiles').upsert({
-        id: 1,
-        name: profile.name,
-        affiliation: profile.affiliation,
-        specialization: profile.specialization,
-        core_stack: profile.coreStack,
-        updated_at: new Date().toISOString(),
-      });
-      alert('프로필이 정상 저장 및 동기화되었습니다.');
-    } catch (err) {
-      alert('로컬에 저장 완료되었습니다. (원격 DB 오프라인)');
+    const { error } = await supabase.from('user_profiles').upsert({
+      id: 1,
+      name: profile.name,
+      affiliation: profile.affiliation,
+      specialization: profile.specialization,
+      core_stack: profile.coreStack,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      alert(`❌ DB 프로필 동기화 실패: ${error.message}`);
+    } else {
+      alert('✅ DB 프로필 동기화 완료! (휴대폰에서 즉시 반영됩니다)');
     }
   };
 
-  // 목표 저장 (Local + Supabase 2중 안전 저장)
+  // 목표 저장
   const handleSaveGoals = async () => {
     if (!isAuthenticated) return;
     playClickSound();
@@ -390,38 +385,40 @@ export default function EngineeringHub() {
     localStorage.setItem('station_yearly_goal', yearlyGoal);
     localStorage.setItem('station_monthly_goal', monthlyGoal);
 
-    try {
-      await supabase.from('user_goals').upsert({
-        id: 1,
-        yearly_goal: yearlyGoal,
-        monthly_goal: monthlyGoal,
-        updated_at: new Date().toISOString(),
-      });
-      alert('목표가 정상 저장 및 동기화되었습니다.');
-    } catch (err) {
-      alert('로컬에 저장 완료되었습니다. (원격 DB 오프라인)');
+    const { error } = await supabase.from('user_goals').upsert({
+      id: 1,
+      yearly_goal: yearlyGoal,
+      monthly_goal: monthlyGoal,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      alert(`❌ DB 목표 동기화 실패: ${error.message}`);
+    } else {
+      alert('✅ DB 목표 동기화 완료! (휴대폰에서 즉시 반영됩니다)');
     }
   };
 
-  // 자소서 저장 (Local + Supabase 2중 안전 저장)
+  // 자소서 저장
   const handleSaveCareerDoc = async () => {
     if (!isAuthenticated) return;
     playClickSound();
     localStorage.setItem('station_career_doc', careerDoc);
 
-    try {
-      await supabase.from('user_career_docs').upsert({
-        id: 1,
-        content: careerDoc,
-        updated_at: new Date().toISOString(),
-      });
-      alert('자소서가 정상 영구 저장되었습니다.');
-    } catch (err) {
-      alert('로컬에 저장 완료되었습니다. (원격 DB 오프라인)');
+    const { error } = await supabase.from('user_career_docs').upsert({
+      id: 1,
+      content: careerDoc,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      alert(`❌ DB 자소서 동기화 실패: ${error.message}`);
+    } else {
+      alert('✅ DB 자소서 동기화 완료!');
     }
   };
 
-  // 일정 추가 (낙관적 렌더링 + Local 즉시 저장 + Supabase 비동기 동기화)
+  // 일정 추가
   const handleAddSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAuthenticated) {
@@ -431,7 +428,7 @@ export default function EngineeringHub() {
     playClickSound();
     if (!newTitle.trim()) return;
 
-    const newItem: ScheduleItem = {
+    const tempItem: ScheduleItem = {
       id: Date.now(),
       date: newDate,
       title: newTitle,
@@ -439,28 +436,21 @@ export default function EngineeringHub() {
       isDday: newIsDday,
     };
 
-    // 1. 화면 및 로컬스토리지 즉각 반영 (에러로 멈추는 일 원천 방지)
-    const updated = [...schedules, newItem].sort((a, b) => a.date.localeCompare(b.date));
+    const updated = [...schedules, tempItem].sort((a, b) => a.date.localeCompare(b.date));
     setSchedules(updated);
     localStorage.setItem('station_schedules', JSON.stringify(updated));
     setNewTitle('');
     setNewIsDday(false);
 
-    // 2. Supabase 백그라운드 동기화
-    try {
-      const { error } = await supabase.from('user_schedules').insert({
-        date: newItem.date,
-        title: newItem.title,
-        category: newItem.category,
-        is_dday: newItem.isDday,
-      });
+    const { error } = await supabase.from('user_schedules').insert({
+      date: tempItem.date,
+      title: tempItem.title,
+      category: tempItem.category,
+      is_dday: tempItem.isDday,
+    });
 
-      if (error) {
-        console.warn('Supabase DB 동기화 대기 (로컬에는 보존됨):', error.message || error);
-      }
-    } catch (err: unknown) {
-      const errorMsg = (err as { message?: string })?.message || JSON.stringify(err);
-      console.warn('Supabase 네트워크 통신 오류:', errorMsg);
+    if (error) {
+      console.warn('DB 일정 등록 실패 (로컬 유지됨):', error.message);
     }
   };
 
@@ -475,9 +465,7 @@ export default function EngineeringHub() {
     setSchedules(updated);
     localStorage.setItem('station_schedules', JSON.stringify(updated));
 
-    try {
-      await supabase.from('user_schedules').delete().eq('id', id);
-    } catch (err) {}
+    await supabase.from('user_schedules').delete().eq('id', id);
   };
 
   // 학습 로그 등록
@@ -491,7 +479,7 @@ export default function EngineeringHub() {
     const durationTotalMin = logHours * 60 + logMinutes;
     if (durationTotalMin <= 0) return;
 
-    const newLog: StudyBoardLog = {
+    const tempLog: StudyBoardLog = {
       id: Date.now(),
       date: logDate,
       subject: logSubject,
@@ -500,26 +488,22 @@ export default function EngineeringHub() {
       summary: logSummary.trim() || '학습 내용 요약 없음',
     };
 
-    // 1. 로컬 즉시 저장
-    const updated = [newLog, ...studyLogs].sort((a, b) => b.date.localeCompare(a.date));
+    const updated = [tempLog, ...studyLogs].sort((a, b) => b.date.localeCompare(a.date));
     setStudyLogs(updated);
     localStorage.setItem('station_board_study_logs', JSON.stringify(updated));
     setLogSummary('');
 
-    // 2. DB 동기화
-    try {
-      const { error } = await supabase.from('study_board_logs').insert({
-        date: newLog.date,
-        subject: newLog.subject,
-        duration_hours: newLog.durationHours,
-        duration_minutes: newLog.durationMinutes,
-        summary: newLog.summary,
-      });
+    const { error } = await supabase.from('study_board_logs').insert({
+      date: tempLog.date,
+      subject: tempLog.subject,
+      duration_hours: tempLog.durationHours,
+      duration_minutes: tempLog.durationMinutes,
+      summary: tempLog.summary,
+    });
 
-      if (error) {
-        console.warn('Supabase 로그 동기화 대기:', error.message || error);
-      }
-    } catch (err) {}
+    if (error) {
+      console.warn('DB 학습로그 등록 실패 (로컬 유지됨):', error.message);
+    }
   };
 
   // 학습 로그 삭제
@@ -533,9 +517,7 @@ export default function EngineeringHub() {
     setStudyLogs(updated);
     localStorage.setItem('station_board_study_logs', JSON.stringify(updated));
 
-    try {
-      await supabase.from('study_board_logs').delete().eq('id', id);
-    } catch (err) {}
+    await supabase.from('study_board_logs').delete().eq('id', id);
   };
 
   // D-Day 계산 유틸리티
