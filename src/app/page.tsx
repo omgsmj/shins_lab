@@ -388,7 +388,7 @@ export default function EngineeringHub() {
     if (error) {
       alert(`❌ DB 프로필 동기화 실패: ${error.message}`);
     } else {
-      alert('✅ DB 프로필 동기화 완료! (휴대폰에서 즉시 반영됩니다)');
+      alert('✅ DB 프로필 동기화 완료!');
     }
   };
 
@@ -410,7 +410,7 @@ export default function EngineeringHub() {
     if (error) {
       alert(`❌ DB 목표 동기화 실패: ${error.message}`);
     } else {
-      alert('✅ DB 목표 동기화 완료! (휴대폰에서 즉시 반영됩니다)');
+      alert('✅ DB 목표 동기화 완료!');
     }
   };
 
@@ -1173,7 +1173,7 @@ export default function EngineeringHub() {
               <span className="text-xs font-bold text-[#8b949e] uppercase">SCHEDULED_EVENTS_QUEUE</span>
               <span className="text-[10px] text-[#238636]">STORAGE: HYBRID_SYNC</span>
             </div>
-            <div className="space-y-2 max-h-60 overflow-y-auto pr-1.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#0d1117] [&::-webkit-scrollbar-track]:rounded-full [&::webkit-scrollbar-thumnb]:bg-[#1f6feb] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&webkit-scrollbar-thumb]:bg-[#388bfd] [&::webkit-scrollbar-thumb]:border [&::-webkit-scrollbar-thumb]:border-[#161b22]">
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#0d1117] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#1f6feb] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#388bfd] [&::-webkit-scrollbar-thumb]:border [&::-webkit-scrollbar-thumb]:border-[#161b22]">
               {schedules.map((s) => (
                 <div
                   key={s.id}
@@ -1301,11 +1301,18 @@ export default function EngineeringHub() {
             <div className="flex items-center justify-between border-b border-[#30363d] pb-3 mb-4">
               <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
                 <span>📚 STUDY_BOARD_ARCHIVE</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-950/60 text-purple-300 border border-purple-500/40">
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-950/60 text-purple-300 border border-purple-500/40 font-bold">
                   HYBRID SYNC
                 </span>
               </span>
-              <span className="text-[10px] text-[#8b949e]">날짜별 학습 기록</span>
+              <div className="flex items-center gap-2 text-[10px]">
+                <span className="px-2 py-0.5 rounded bg-[#0d1117] border border-[#30363d] text-[#8b949e]">
+                  당월: <strong className="text-white font-mono">{studyLogs.length}건</strong>
+                </span>
+                <span className="px-2 py-0.5 rounded bg-[#0d1117] border border-[#30363d] text-[#8b949e]">
+                  누적: <strong className="text-[#d2a8ff] font-mono">{Math.floor(currentMonthTotalMinutes / 60)}h {currentMonthTotalMinutes % 60}m</strong>
+                </span>
+              </div>
             </div>
 
             {isAuthenticated ? (
@@ -1368,7 +1375,7 @@ export default function EngineeringHub() {
               </div>
             )}
 
-            <div className="space-y-2 max-h-72 overflow-y-auto pr-1.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#0d1117] [&::-webkit-scrollbar-track]:rounded-full [&::webkit-scrollbar-thumb]:bg-[#6e40c9] [&::webkit-scrollbar-thumb]:rounded-full hover:[&::webkit-scrollbar-thumb]:bg-[#8957e5] [&::-webkit-scrollbar-thumb]:border [&::-webkit-scrollbar-thumb]:border-[#161b22]">
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#0d1117] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#6e40c9] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#8957e5] [&::-webkit-scrollbar-thumb]:border [&::-webkit-scrollbar-thumb]:border-[#161b22]">
               {studyLogs.length === 0 ? (
                 <div className="text-[11px] text-[#8b949e] py-4 text-center">등록된 학습 게시물이 없습니다.</div>
               ) : (
