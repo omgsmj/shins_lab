@@ -1173,7 +1173,7 @@ export default function EngineeringHub() {
               <span className="text-xs font-bold text-[#8b949e] uppercase">SCHEDULED_EVENTS_QUEUE</span>
               <span className="text-[10px] text-[#238636]">STORAGE: HYBRID_SYNC</span>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-[#0d1117] [&::webkit-scrollbar-thumnb]:bg-[#30363d] [&::-webkit-scrollbar-thumb]:rounded hover:[&webkit-scrollbar-thumb]:bg-[#484f58]">
               {schedules.map((s) => (
                 <div
                   key={s.id}
