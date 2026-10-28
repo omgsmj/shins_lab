@@ -90,9 +90,9 @@ export default function EngineeringHub() {
 
   // 7. 달력 및 일정 (D-Day 포함)
   const [schedules, setSchedules] = useState<ScheduleItem[]>(DEFAULT_SCHEDULES);
-  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 9, 26));
+  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 9, 28));
   const [newTitle, setNewTitle] = useState<string>('');
-  const [newDate, setNewDate] = useState<string>('2026-10-26');
+  const [newDate, setNewDate] = useState<string>('2026-10-28');
   const [newCategory, setNewCategory] = useState<'DEV' | 'ACADEMIC' | 'PERSONAL'>('DEV');
   const [newIsDday, setNewIsDday] = useState<boolean>(false);
   const [isDdayHovered, setIsDdayHovered] = useState<boolean>(false);
@@ -107,7 +107,7 @@ export default function EngineeringHub() {
 
   // 9. 학습 로그 게시판
   const [studyLogs, setStudyLogs] = useState<StudyBoardLog[]>([]);
-  const [logDate, setLogDate] = useState<string>('2026-10-26');
+  const [logDate, setLogDate] = useState<string>('2026-10-28');
   const [logSubject, setLogSubject] = useState<string>('정처기 CBT');
   const [logHours, setLogHours] = useState<number>(1);
   const [logMinutes, setLogMinutes] = useState<number>(30);
@@ -126,7 +126,6 @@ export default function EngineeringHub() {
     setIsMounted(true);
   }, []);
 
-  // Web Audio API 기계식 스위치 클릭음
   const playClickSound = () => {
     if (!soundEnabled || typeof window === 'undefined') return;
     try {
@@ -152,7 +151,6 @@ export default function EngineeringHub() {
     } catch (e) {}
   };
 
-  // 실시간 시계
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -169,7 +167,6 @@ export default function EngineeringHub() {
     return () => clearInterval(timer);
   }, []);
 
-  // 타이머 루프
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isTimerRunning && timerLeft > 0) {
@@ -182,7 +179,6 @@ export default function EngineeringHub() {
     return () => clearInterval(interval);
   }, [isTimerRunning, timerLeft]);
 
-  // 스톱워치 루프
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isStopwatchRunning) {
@@ -191,7 +187,6 @@ export default function EngineeringHub() {
     return () => clearInterval(interval);
   }, [isStopwatchRunning]);
 
-  // 전주시 실시간 기상 관측 및 특보 감지
   useEffect(() => {
     const fetchJeonjuWeather = async () => {
       try {
@@ -238,7 +233,6 @@ export default function EngineeringHub() {
     fetchJeonjuWeather();
   }, []);
 
-  // Supabase 원격 DB 최신 데이터 동기화
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -333,7 +327,6 @@ export default function EngineeringHub() {
           localStorage.setItem('station_board_study_logs', JSON.stringify(mappedLogs));
         }
 
-        // 데일리 투두 로드
         const { data: tData } = await supabase.from('dev_checklist').select('*').order('id', { ascending: true });
         if (tData) {
           setTasks(tData);
@@ -346,11 +339,11 @@ export default function EngineeringHub() {
     syncRemoteData();
   }, []);
 
-  // 로그인 & 로그아웃
+  // 계정 검증 로직 (ddan1218 / TLSALSWHD)
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     playClickSound();
-    if (adminId === 'admin' && adminPw === 'tlsalswhd') {
+    if (adminId === 'ddan1218' && adminPw === 'TLSALSWHD') {
       setIsAuthenticated(true);
       setAuthError(false);
       setShowLoginModal(false);
@@ -370,7 +363,6 @@ export default function EngineeringHub() {
     sessionStorage.removeItem('station_auth_status');
   };
 
-  // 프로필 저장
   const handleSaveProfile = async () => {
     playClickSound();
     setIsEditingProfile(false);
@@ -392,7 +384,6 @@ export default function EngineeringHub() {
     }
   };
 
-  // 목표 저장
   const handleSaveGoals = async () => {
     if (!isAuthenticated) return;
     playClickSound();
@@ -414,7 +405,6 @@ export default function EngineeringHub() {
     }
   };
 
-  // 자소서 저장
   const handleSaveCareerDoc = async () => {
     if (!isAuthenticated) return;
     playClickSound();
@@ -433,11 +423,10 @@ export default function EngineeringHub() {
     }
   };
 
-  // 일정 추가
   const handleAddSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAuthenticated) {
-      alert('관리자 로그인이 필요한 작업입니다.');
+      setShowLoginModal(true);
       return;
     }
     playClickSound();
@@ -469,10 +458,9 @@ export default function EngineeringHub() {
     }
   };
 
-  // 일정 삭제
   const handleDeleteSchedule = async (id: number) => {
     if (!isAuthenticated) {
-      alert('관리자 로그인이 필요한 작업입니다.');
+      setShowLoginModal(true);
       return;
     }
     playClickSound();
@@ -483,11 +471,10 @@ export default function EngineeringHub() {
     await supabase.from('user_schedules').delete().eq('id', id);
   };
 
-  // 학습 로그 등록
   const handleAddStudyLog = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAuthenticated) {
-      alert('관리자 로그인이 필요한 작업입니다.');
+      setShowLoginModal(true);
       return;
     }
     playClickSound();
@@ -521,10 +508,9 @@ export default function EngineeringHub() {
     }
   };
 
-  // 학습 로그 삭제
   const handleDeleteStudyLog = async (id: number) => {
     if (!isAuthenticated) {
-      alert('관리자 로그인이 필요한 작업입니다.');
+      setShowLoginModal(true);
       return;
     }
     playClickSound();
@@ -535,8 +521,11 @@ export default function EngineeringHub() {
     await supabase.from('study_board_logs').delete().eq('id', id);
   };
 
-  // 데일리 투두 토글 (에러 검증 및 확실한 DB 동기화)
   const handleToggleTask = async (task: DevTask) => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
     playClickSound();
     const nextStatus = !task.is_completed;
 
@@ -558,11 +547,10 @@ export default function EngineeringHub() {
     }
   };
 
-  // 데일리 투두 추가 (DB 저장 확정 후 고유 ID 매핑)
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAuthenticated) {
-      alert('관리자 로그인이 필요한 작업입니다.');
+      setShowLoginModal(true);
       return;
     }
     const trimmed = newTaskInput.trim();
@@ -588,10 +576,9 @@ export default function EngineeringHub() {
     }
   };
 
-  // 데일리 투두 삭제 (DB 삭제 완료 후 화면 제거)
   const handleDeleteTask = async (id: number) => {
     if (!isAuthenticated) {
-      alert('관리자 로그인이 필요한 작업입니다.');
+      setShowLoginModal(true);
       return;
     }
     playClickSound();
@@ -606,7 +593,6 @@ export default function EngineeringHub() {
     setTasks((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // D-Day 계산 유틸리티
   const calculateDday = (targetDateStr: string) => {
     if (!targetDateStr) return 'D-DAY';
     try {
@@ -626,7 +612,6 @@ export default function EngineeringHub() {
     }
   };
 
-  // 커플 기념일 및 마일스톤 연산
   const calculateCoupleMilestones = () => {
     const startDate = new Date(2019, 11, 7);
     startDate.setHours(0, 0, 0, 0);
@@ -698,7 +683,6 @@ export default function EngineeringHub() {
 
   const ddayItems = schedules.filter((s) => s.isDday);
 
-  // 최근 12주(84일) 잔디 히트맵 데이터 계산
   const studyDateMinutesMap: Record<string, number> = {};
   studyLogs.forEach((l) => {
     const mins = l.durationHours * 60 + l.durationMinutes;
@@ -706,7 +690,7 @@ export default function EngineeringHub() {
   });
 
   const heatmapDays = Array.from({ length: 84 }, (_, idx) => {
-    const d = new Date(2026, 9, 26);
+    const d = new Date(2026, 9, 28);
     d.setDate(d.getDate() - (83 - idx));
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -716,7 +700,6 @@ export default function EngineeringHub() {
     return { date: key, minutes };
   });
 
-  // 투두 완료 진행률
   const completedTasksCount = tasks.filter((t) => t.is_completed).length;
   const taskProgressPct = tasks.length > 0 ? Math.round((completedTasksCount / tasks.length) * 100) : 0;
 
@@ -747,7 +730,7 @@ export default function EngineeringHub() {
                 <label className="text-[10px] text-[#8b949e] uppercase block mb-1">OPERATOR ID</label>
                 <input
                   type="text"
-                  placeholder="admin"
+                  placeholder="ID"
                   value={adminId}
                   onChange={(e) => setAdminId(e.target.value)}
                   className="w-full bg-[#0d1117] border border-[#30363d] text-xs px-3 py-2 rounded text-white focus:outline-none focus:border-[#58a6ff]"
@@ -770,7 +753,7 @@ export default function EngineeringHub() {
 
               <button
                 type="submit"
-                className="w-full bg-[#238636] hover:bg-[#2ea043] text-white text-xs py-2 rounded font-bold transition mt-2"
+                className="w-full bg-[#238636] hover:bg-[#2ea043] text-white text-xs py-2 rounded font-bold transition mt-2 shadow-lg"
               >
                 LOGIN
               </button>
@@ -809,7 +792,6 @@ export default function EngineeringHub() {
             SFX: {soundEnabled ? 'ON' : 'MUTE'}
           </button>
 
-          {/* 통합 관리자 로그인/로그아웃 */}
           {isAuthenticated ? (
             <button
               onClick={handleLogout}
@@ -831,7 +813,7 @@ export default function EngineeringHub() {
         </div>
 
         <div className="flex flex-wrap items-center gap-4 text-xs text-[#8b949e]">
-          {/* D-Day 호버 팝오버 트리거 */}
+          {/* D-Day 호버 팝오버 */}
           <div
             className="relative cursor-pointer"
             onMouseEnter={() => setIsDdayHovered(true)}
@@ -846,7 +828,11 @@ export default function EngineeringHub() {
                 <div className="text-[10px] font-bold text-[#8b949e] border-b border-[#30363d] pb-1 uppercase">
                   ACTIVE_COUNTDOWN_QUEUE
                 </div>
-                {ddayItems.length === 0 ? (
+                {!isAuthenticated ? (
+                  <div className="text-[11px] text-amber-400/90 py-2 text-center">
+                    🔒 개인 일정 보안 잠금 상태입니다.
+                  </div>
+                ) : ddayItems.length === 0 ? (
                   <div className="text-[11px] text-[#8b949e] py-2 text-center">지정된 D-Day 일정이 없습니다.</div>
                 ) : (
                   ddayItems.map((item) => (
@@ -914,14 +900,14 @@ export default function EngineeringHub() {
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-[#8b949e] group-hover:text-[#f85149]">ENGINE 03</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-950/40 text-[#f85149] border border-rose-500/40">
-              🔒 SECURE
+              {isAuthenticated ? 'UNLOCKED' : '🔒 LOCKED'}
             </span>
           </div>
           <div className="text-base font-bold text-white mt-1">스마트 가계부 & 예산</div>
           <div className="text-xs text-[#8b949e] mt-1">지출 기록 · 가용 예산 추적 · 비밀번호 보호</div>
         </Link>
 
-        {/* ENGINE 04: 습관 & 루틴 매트릭스 */}
+        {/* ENGINE 04: 습관 & 루틴 매트릭스 (보안 구역) */}
         <Link
           href="/habits"
           onClick={playClickSound}
@@ -929,15 +915,15 @@ export default function EngineeringHub() {
         >
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-[#8b949e] group-hover:text-[#7ee787]">ENGINE 04</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#238636]/20 text-[#7ee787] border border-[#238636]/40">
-              🔥 STREAK
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-950/40 text-[#f85149] border border-rose-500/40">
+              {isAuthenticated ? 'UNLOCKED' : '🔒 LOCKED'}
             </span>
           </div>
           <div className="text-base font-bold text-white mt-1">습관 & 루틴 매트릭스</div>
           <div className="text-xs text-[#8b949e] mt-1">데일리 루틴 체크 · 7일간의 연속 달성 추적</div>
         </Link>
 
-        {/* ENGINE 05: 프로젝트 칸반 보드 */}
+        {/* ENGINE 05: 프로젝트 칸반 보드 (보안 구역) */}
         <Link
           href="/kanban"
           onClick={playClickSound}
@@ -945,15 +931,15 @@ export default function EngineeringHub() {
         >
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-[#8b949e] group-hover:text-[#d2a8ff]">ENGINE 05</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#a371f7]/20 text-[#d2a8ff] border border-[#a371f7]/40">
-              PIPELINE
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-950/40 text-[#f85149] border border-rose-500/40">
+              {isAuthenticated ? 'UNLOCKED' : '🔒 LOCKED'}
             </span>
           </div>
           <div className="text-base font-bold text-white mt-1">프로젝트 칸반 보드</div>
           <div className="text-xs text-[#8b949e] mt-1">TODO ➔ IN PROGRESS ➔ DONE 3단계 관리</div>
         </Link>
 
-        {/* ENGINE 06: 24H 타임블록 플래너 */}
+        {/* ENGINE 06: 24H 타임블록 플래너 (보안 구역) */}
         <Link
           href="/planner"
           onClick={playClickSound}
@@ -961,8 +947,8 @@ export default function EngineeringHub() {
         >
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-[#8b949e] group-hover:text-[#f0883e]">ENGINE 06</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#bd561d]/20 text-[#f0883e] border border-[#bd561d]/40">
-              TIMELINE
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-950/40 text-[#f85149] border border-rose-500/40">
+              {isAuthenticated ? 'UNLOCKED' : '🔒 LOCKED'}
             </span>
           </div>
           <div className="text-base font-bold text-white mt-1">24H 타임블록 플래너</div>
@@ -1033,94 +1019,115 @@ export default function EngineeringHub() {
             </div>
           </div>
 
-          {/* 달력 컨테이너 */}
-          <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
-            <div className="flex items-center justify-between border-b border-[#30363d] pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-white tracking-wider">SCHEDULE_CALENDAR</span>
-                <span className="text-xs text-[#8b949e]">
-                  ({year}.{String(month + 1).padStart(2, '0')})
-                </span>
-              </div>
-              <div className="flex gap-1 text-xs">
-                <button
-                  onClick={() => {
-                    playClickSound();
-                    setCurrentDate(new Date(year, month - 1, 1));
-                  }}
-                  className="px-2 py-1 rounded bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9]"
-                >
-                  ◀ PREV
-                </button>
-                <button
-                  onClick={() => {
-                    playClickSound();
-                    setCurrentDate(new Date(year, month + 1, 1));
-                  }}
-                  className="px-2 py-1 rounded bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9]"
-                >
-                  NEXT ▶
-                </button>
-              </div>
-            </div>
-
-            {/* 월간 그리드 */}
-            <div className="grid grid-cols-7 gap-1 text-center text-xs mb-4">
-              {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day, idx) => (
-                <div key={day} className={`font-bold py-1 ${idx === 0 ? 'text-[#f85149]' : 'text-[#8b949e]'}`}>
-                  {day}
+          {/* 달력 컨테이너 (비로그인 시 블러 처리) */}
+          <div className="relative border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg overflow-hidden">
+            {!isAuthenticated && (
+              <div className="absolute inset-0 z-30 bg-black/60 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center">
+                <div className="w-12 h-12 rounded-full bg-rose-950/60 border border-rose-500/40 flex items-center justify-center text-xl mb-3 shadow-lg">
+                  🔒
                 </div>
-              ))}
-              {Array.from({ length: firstDayIndex }).map((_, i) => (
-                <div key={`empty-${i}`} className="min-h-[72px] border border-transparent" />
-              ))}
-              {daysArray.map((d) => {
-                const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                const matchedSchedules = schedules.filter((s) => s.date === dateKey);
-                const isToday = d === 26 && month === 9;
+                <h3 className="text-sm font-bold text-white mb-1">SCHEDULE_CALENDAR LOCKED</h3>
+                <p className="text-xs text-[#8b949e] max-w-sm mb-4 leading-relaxed">
+                  개인 스케줄 및 학사/수험 일정 보호를 위해 블러 잠금 처리되었습니다. 관리자 인증 후 열람할 수 있습니다.
+                </p>
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setShowLoginModal(true);
+                  }}
+                  className="bg-[#238636] hover:bg-[#2ea043] text-white text-xs px-4 py-2 rounded font-bold transition shadow-md"
+                >
+                  로그인하고 일정 열람
+                </button>
+              </div>
+            )}
 
-                return (
-                  <div
-                    key={d}
+            <div className={!isAuthenticated ? 'blur-sm select-none pointer-events-none' : ''}>
+              <div className="flex items-center justify-between border-b border-[#30363d] pb-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-white tracking-wider">SCHEDULE_CALENDAR</span>
+                  <span className="text-xs text-[#8b949e]">
+                    ({year}.{String(month + 1).padStart(2, '0')})
+                  </span>
+                </div>
+                <div className="flex gap-1 text-xs">
+                  <button
                     onClick={() => {
                       playClickSound();
-                      setNewDate(dateKey);
-                      setLogDate(dateKey);
+                      setCurrentDate(new Date(year, month - 1, 1));
                     }}
-                    className={`min-h-[72px] border rounded p-1 text-left flex flex-col justify-start cursor-pointer transition overflow-hidden ${
-                      isToday
-                        ? 'border-[#58a6ff] bg-[#58a6ff]/10 font-bold text-white'
-                        : matchedSchedules.length > 0
-                        ? 'border-[#30363d] bg-[#21262d]/60 text-[#c9d1d9]'
-                        : 'border-[#21262d] bg-[#0d1117]/50 text-[#8b949e] hover:border-[#30363d]'
-                    }`}
+                    className="px-2 py-1 rounded bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9]"
                   >
-                    <span className="text-[10px] mb-1 font-mono">{d}</span>
-                    <div className="space-y-1 w-full">
-                      {matchedSchedules.map((s) => (
-                        <div
-                          key={s.id}
-                          title={s.title}
-                          className={`text-[9px] px-1 py-0.5 rounded truncate font-sans flex items-center justify-between ${
-                            s.category === 'DEV'
-                              ? 'bg-[#238636]/30 text-[#7ee787] border border-[#238636]/50'
-                              : s.category === 'ACADEMIC'
-                              ? 'bg-[#1f6feb]/30 text-[#58a6ff] border border-[#1f6feb]/50'
-                              : 'bg-[#a371f7]/30 text-[#d2a8ff] border border-[#a371f7]/50'
-                          }`}
-                        >
-                          <span className="truncate">{s.title}</span>
-                          {s.isDday && <span className="text-[8px] text-amber-300 shrink-0 font-bold">★D</span>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                    ◀ PREV
+                  </button>
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      setCurrentDate(new Date(year, month + 1, 1));
+                    }}
+                    className="px-2 py-1 rounded bg-[#21262d] hover:bg-[#30363d] text-[#c9d1d9]"
+                  >
+                    NEXT ▶
+                  </button>
+                </div>
+              </div>
 
-            {/* 일정 추가 폼 */}
-            {isAuthenticated ? (
+              {/* 월간 그리드 */}
+              <div className="grid grid-cols-7 gap-1 text-center text-xs mb-4">
+                {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day, idx) => (
+                  <div key={day} className={`font-bold py-1 ${idx === 0 ? 'text-[#f85149]' : 'text-[#8b949e]'}`}>
+                    {day}
+                  </div>
+                ))}
+                {Array.from({ length: firstDayIndex }).map((_, i) => (
+                  <div key={`empty-${i}`} className="min-h-[72px] border border-transparent" />
+                ))}
+                {daysArray.map((d) => {
+                  const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                  const matchedSchedules = schedules.filter((s) => s.date === dateKey);
+                  const isToday = d === 28 && month === 9;
+
+                  return (
+                    <div
+                      key={d}
+                      onClick={() => {
+                        playClickSound();
+                        setNewDate(dateKey);
+                        setLogDate(dateKey);
+                      }}
+                      className={`min-h-[72px] border rounded p-1 text-left flex flex-col justify-start cursor-pointer transition overflow-hidden ${
+                        isToday
+                          ? 'border-[#58a6ff] bg-[#58a6ff]/10 font-bold text-white'
+                          : matchedSchedules.length > 0
+                          ? 'border-[#30363d] bg-[#21262d]/60 text-[#c9d1d9]'
+                          : 'border-[#21262d] bg-[#0d1117]/50 text-[#8b949e] hover:border-[#30363d]'
+                      }`}
+                    >
+                      <span className="text-[10px] mb-1 font-mono">{d}</span>
+                      <div className="space-y-1 w-full">
+                        {matchedSchedules.map((s) => (
+                          <div
+                            key={s.id}
+                            title={s.title}
+                            className={`text-[9px] px-1 py-0.5 rounded truncate font-sans flex items-center justify-between ${
+                              s.category === 'DEV'
+                                ? 'bg-[#238636]/30 text-[#7ee787] border border-[#238636]/50'
+                                : s.category === 'ACADEMIC'
+                                ? 'bg-[#1f6feb]/30 text-[#58a6ff] border border-[#1f6feb]/50'
+                                : 'bg-[#a371f7]/30 text-[#d2a8ff] border border-[#a371f7]/50'
+                            }`}
+                          >
+                            <span className="truncate">{s.title}</span>
+                            {s.isDday && <span className="text-[8px] text-amber-300 shrink-0 font-bold">★D</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 일정 추가 폼 */}
               <form onSubmit={handleAddSchedule} className="pt-3 border-t border-[#30363d] flex flex-col sm:flex-row gap-2 items-center">
                 <input
                   type="date"
@@ -1160,59 +1167,65 @@ export default function EngineeringHub() {
                   + ADD_TASK
                 </button>
               </form>
-            ) : (
-              <div className="pt-3 border-t border-[#30363d] text-center text-xs text-[#8b949e]">
-                🔒 일정 등록 및 수정은 관리자 로그인 후 가능합니다.
+            </div>
+          </div>
+
+          {/* 등록된 일정 큐 리스트 (비로그인 시 블러 처리) */}
+          <div className="relative border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg overflow-hidden">
+            {!isAuthenticated && (
+              <div className="absolute inset-0 z-20 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                <span className="text-xs text-slate-300 font-bold bg-[#161b22] border border-[#30363d] px-3 py-1.5 rounded-lg shadow-xl">
+                  🔒 SCHEDULE_QUEUE LOCKED (로그인 필요)
+                </span>
               </div>
             )}
-          </div>
 
-          {/* 등록된 일정 큐 리스트 */}
-          <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-[#8b949e] uppercase">SCHEDULED_EVENTS_QUEUE</span>
-              <span className="text-[10px] text-[#238636]">STORAGE: HYBRID_SYNC</span>
-            </div>
-            <div className="space-y-2 max-h-60 overflow-y-auto pr-1.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#0d1117] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#1f6feb] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#388bfd] [&::-webkit-scrollbar-thumb]:border [&::-webkit-scrollbar-thumb]:border-[#161b22]">
-              {schedules.map((s) => (
-                <div
-                  key={s.id}
-                  className="flex items-center justify-between p-2.5 rounded bg-[#0d1117] border border-[#21262d] text-xs"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-[#58a6ff] text-[11px]">{s.date}</span>
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                        s.category === 'DEV'
-                          ? 'bg-[#238636]/20 text-[#7ee787]'
-                          : s.category === 'ACADEMIC'
-                          ? 'bg-[#1f6feb]/20 text-[#58a6ff]'
-                          : 'bg-[#a371f7]/20 text-[#d2a8ff]'
-                      }`}
-                    >
-                      {s.category}
-                    </span>
-                    <span className="text-slate-200">{s.title}</span>
-                    {s.isDday && isMounted && (
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
-                        {calculateDday(s.date)}
+            <div className={!isAuthenticated ? 'blur-sm select-none pointer-events-none' : ''}>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-[#8b949e] uppercase">SCHEDULED_EVENTS_QUEUE</span>
+                <span className="text-[10px] text-[#238636]">STORAGE: HYBRID_SYNC</span>
+              </div>
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#0d1117] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#1f6feb] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#388bfd] [&::-webkit-scrollbar-thumb]:border [&::-webkit-scrollbar-thumb]:border-[#161b22]">
+                {schedules.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex items-center justify-between p-2.5 rounded bg-[#0d1117] border border-[#21262d] text-xs"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-[#58a6ff] text-[11px]">{s.date}</span>
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                          s.category === 'DEV'
+                            ? 'bg-[#238636]/20 text-[#7ee787]'
+                            : s.category === 'ACADEMIC'
+                            ? 'bg-[#1f6feb]/20 text-[#58a6ff]'
+                            : 'bg-[#a371f7]/20 text-[#d2a8ff]'
+                        }`}
+                      >
+                        {s.category}
                       </span>
+                      <span className="text-slate-200">{s.title}</span>
+                      {s.isDday && isMounted && (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
+                          {calculateDday(s.date)}
+                        </span>
+                      )}
+                    </div>
+                    {isAuthenticated && (
+                      <button
+                        onClick={() => handleDeleteSchedule(s.id)}
+                        className="text-[#8b949e] hover:text-[#f85149] text-xs px-1"
+                      >
+                        ×
+                      </button>
                     )}
                   </div>
-                  {isAuthenticated && (
-                    <button
-                      onClick={() => handleDeleteSchedule(s.id)}
-                      className="text-[#8b949e] hover:text-[#f85149] text-xs px-1"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* 공부 기록 잔디밭 (GitHub Heatmap) & 누적 통계 */}
+          {/* 공부 기록 잔디밭 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-4 shadow-lg space-y-4">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-2">
               <div className="flex items-center gap-2">
@@ -1224,7 +1237,6 @@ export default function EngineeringHub() {
               </span>
             </div>
 
-            {/* 잔디밭 그리드 (7행 × 12열 = 84일) */}
             <div className="bg-[#0d1117] border border-[#21262d] rounded-lg p-3">
               <div className="flex gap-1.5 justify-center overflow-x-auto py-1">
                 {Array.from({ length: 12 }).map((_, colIdx) => (
@@ -1262,7 +1274,6 @@ export default function EngineeringHub() {
               </div>
             </div>
 
-            {/* 과목별 미니 프로그레스 바 */}
             {currentMonthTotalMinutes > 0 && (
               <div className="space-y-2 pt-1">
                 <div className="flex h-2 w-full overflow-hidden rounded-full bg-[#0d1117] border border-[#21262d]">
@@ -1358,7 +1369,7 @@ export default function EngineeringHub() {
                     type="text"
                     value={logSummary}
                     onChange={(e) => setLogSummary(e.target.value)}
-                    placeholder="학습 내용 상세 (예: 기출문제 풀이, 알고리즘 구현 등)..."
+                    placeholder="학습 내용 상세..."
                     className="flex-1 bg-[#161b22] border border-[#30363d] px-2.5 py-1 rounded text-white text-xs focus:outline-none focus:border-[#a371f7]"
                   />
                   <button
@@ -1664,63 +1675,68 @@ export default function EngineeringHub() {
             </div>
           </div>
 
-          {/* 오늘의 엔지니어링 투두 체크리스트 */}
-          <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg space-y-3">
-            <div className="flex items-center justify-between border-b border-[#30363d] pb-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-white uppercase tracking-wider">DEV_CHECKLIST</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-950/60 text-blue-300 border border-blue-500/40">
-                  {completedTasksCount}/{tasks.length} ({taskProgressPct}%)
+          {/* 오늘의 엔지니어링 투두 체크리스트 (비로그인 시 블러 처리) */}
+          <div className="relative border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg space-y-3 overflow-hidden">
+            {!isAuthenticated && (
+              <div className="absolute inset-0 z-20 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                <span className="text-xs text-slate-300 font-bold bg-[#161b22] border border-[#30363d] px-3 py-1.5 rounded-lg shadow-xl">
+                  🔒 CHECKLIST LOCKED (로그인 필요)
                 </span>
               </div>
-              <span className="text-[10px] text-[#8b949e]">DAILY_SPRINT</span>
-            </div>
+            )}
 
-            {/* 게이지 바 */}
-            <div className="h-1.5 w-full bg-[#0d1117] rounded-full overflow-hidden border border-[#21262d]">
-              <div
-                style={{ width: `${taskProgressPct}%` }}
-                className="h-full bg-gradient-to-r from-[#238636] to-[#7ee787] transition-all duration-300"
-              />
-            </div>
+            <div className={!isAuthenticated ? 'blur-sm select-none pointer-events-none' : ''}>
+              <div className="flex items-center justify-between border-b border-[#30363d] pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">DEV_CHECKLIST</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-950/60 text-blue-300 border border-blue-500/40">
+                    {completedTasksCount}/{tasks.length} ({taskProgressPct}%)
+                  </span>
+                </div>
+                <span className="text-[10px] text-[#8b949e]">DAILY_SPRINT</span>
+              </div>
 
-            {/* 투두 리스트 */}
-            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-              {tasks.length === 0 ? (
-                <div className="text-[11px] text-[#8b949e] py-3 text-center">등록된 데일리 태스크가 없습니다.</div>
-              ) : (
-                tasks.map((t) => (
-                  <div
-                    key={t.id}
-                    className="flex items-center justify-between p-2 rounded bg-[#0d1117] border border-[#21262d] text-xs hover:border-[#30363d] transition"
-                  >
-                    <label className="flex items-center gap-2.5 cursor-pointer flex-1 select-none">
-                      <input
-                        type="checkbox"
-                        checked={t.is_completed}
-                        onChange={() => handleToggleTask(t)}
-                        className="rounded border-[#30363d] text-[#238636] focus:ring-0 cursor-pointer"
-                      />
-                      <span className={`${t.is_completed ? 'line-through text-[#8b949e]' : 'text-slate-200'}`}>
-                        {t.task}
-                      </span>
-                    </label>
-                    {isAuthenticated && (
-                      <button
-                        onClick={() => handleDeleteTask(t.id)}
-                        className="text-[#8b949e] hover:text-[#f85149] text-xs px-1 ml-2"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
+              <div className="h-1.5 w-full bg-[#0d1117] rounded-full overflow-hidden border border-[#21262d] my-2">
+                <div
+                  style={{ width: `${taskProgressPct}%` }}
+                  className="h-full bg-gradient-to-r from-[#238636] to-[#7ee787] transition-all duration-300"
+                />
+              </div>
 
-            {/* 투두 추가 폼 */}
-            {isAuthenticated ? (
-              <form onSubmit={handleAddTask} className="flex gap-2 pt-1">
+              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                {tasks.length === 0 ? (
+                  <div className="text-[11px] text-[#8b949e] py-3 text-center">등록된 데일리 태스크가 없습니다.</div>
+                ) : (
+                  tasks.map((t) => (
+                    <div
+                      key={t.id}
+                      className="flex items-center justify-between p-2 rounded bg-[#0d1117] border border-[#21262d] text-xs hover:border-[#30363d] transition"
+                    >
+                      <label className="flex items-center gap-2.5 cursor-pointer flex-1 select-none">
+                        <input
+                          type="checkbox"
+                          checked={t.is_completed}
+                          onChange={() => handleToggleTask(t)}
+                          className="rounded border-[#30363d] text-[#238636] focus:ring-0 cursor-pointer"
+                        />
+                        <span className={`${t.is_completed ? 'line-through text-[#8b949e]' : 'text-slate-200'}`}>
+                          {t.task}
+                        </span>
+                      </label>
+                      {isAuthenticated && (
+                        <button
+                          onClick={() => handleDeleteTask(t.id)}
+                          className="text-[#8b949e] hover:text-[#f85149] text-xs px-1 ml-2"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <form onSubmit={handleAddTask} className="flex gap-2 pt-2">
                 <input
                   type="text"
                   placeholder="새 스프린트 태스크 추가..."
@@ -1735,11 +1751,7 @@ export default function EngineeringHub() {
                   + ADD
                 </button>
               </form>
-            ) : (
-              <div className="text-[10px] text-[#8b949e] text-center pt-1">
-                🔒 체크는 누구나 가능하며, 태스크 추가/삭제는 관리자 로그인 필요
-              </div>
-            )}
+            </div>
           </div>
 
           {/* 대문 오른쪽 아래: 커플 텔레메트리 & 마일스톤 */}

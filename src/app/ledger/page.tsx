@@ -21,18 +21,15 @@ export default function LedgerPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authChecked, setAuthChecked] = useState<boolean>(false);
 
-  // 로그인 폼 상태
   const [loginId, setLoginId] = useState<string>('');
   const [loginPw, setLoginPw] = useState<string>('');
   const [loginError, setLoginError] = useState<boolean>(false);
 
-  // 가계부 데이터 상태
   const [items, setItems] = useState<LedgerItem[]>([]);
   const [monthlyBudget, setMonthlyBudget] = useState<number>(600000);
   const [isEditingBudget, setIsEditingBudget] = useState<boolean>(false);
   const [budgetInput, setBudgetInput] = useState<number>(600000);
 
-  // 입력 폼 상태 (빌드 타임에는 정적 빈 문자열, 마운트 후 오늘 날짜 할당)
   const [inputDate, setInputDate] = useState<string>('');
   const [inputType, setInputType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
   const [inputCategory, setInputCategory] = useState<string>('식비');
@@ -41,7 +38,6 @@ export default function LedgerPage() {
   const [inputPayment, setInputPayment] = useState<string>('CARD');
   const [selectedMonth, setSelectedMonth] = useState<string>('');
 
-  // 브라우저 마운트 시점에만 현재 시간 및 인증 상태 초기화
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const now = new Date();
@@ -65,7 +61,7 @@ export default function LedgerPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginId === 'admin' && loginPw === 'tlsalswhd') {
+    if (loginId === 'ddan1218' && loginPw === 'TLSALSWHD') {
       setIsAuthenticated(true);
       setLoginError(false);
       sessionStorage.setItem('station_auth_status', 'true');
@@ -179,7 +175,7 @@ export default function LedgerPage() {
               <label className="text-[10px] text-[#8b949e] uppercase block mb-1">OPERATOR ID</label>
               <input
                 type="text"
-                placeholder="admin"
+                placeholder="ID"
                 value={loginId}
                 onChange={(e) => setLoginId(e.target.value)}
                 className="w-full bg-[#0d1117] border border-[#30363d] px-3 py-2 rounded text-white text-xs focus:outline-none focus:border-[#58a6ff]"
@@ -404,7 +400,7 @@ export default function LedgerPage() {
                 <label className="text-[10px] text-[#8b949e] uppercase block mb-1">DESCRIPTION</label>
                 <input
                   type="text"
-                  placeholder="사용처 메모 (예: 학생식당, 편의점 등)..."
+                  placeholder="사용처 메모..."
                   value={inputDesc}
                   onChange={(e) => setInputDesc(e.target.value)}
                   className="w-full bg-[#0d1117] border border-[#30363d] px-3 py-1.5 rounded text-white text-xs focus:outline-none focus:border-[#58a6ff]"

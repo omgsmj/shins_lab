@@ -20,16 +20,50 @@ const COLUMNS: { key: 'TODO' | 'IN_PROGRESS' | 'DONE'; label: string; color: str
 ];
 
 export default function KanbanPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [authChecked, setAuthChecked] = useState<boolean>(false);
+
+  const [loginId, setLoginId] = useState<string>('');
+  const [loginPw, setLoginPw] = useState<string>('');
+  const [loginError, setLoginError] = useState<boolean>(false);
+
   const [tasks, setTasks] = useState<KanbanTask[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // 새 태스크 추가 폼 상태
   const [newTitle, setNewTitle] = useState<string>('');
   const [newDesc, setNewDesc] = useState<string>('');
   const [newPriority, setNewPriority] = useState<'HIGH' | 'MEDIUM' | 'LOW'>('MEDIUM');
   const [newDueDate, setNewDueDate] = useState<string>('');
 
-  // 1. DB 실시간 데이터 로드
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const auth = sessionStorage.getItem('station_auth_status') === 'true';
+      setIsAuthenticated(auth);
+      setAuthChecked(true);
+      if (auth) {
+        fetchTasks();
+      }
+    }
+  }, []);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loginId === 'ddan1218' && loginPw === 'TLSALSWHD') {
+      setIsAuthenticated(true);
+      setLoginError(false);
+      sessionStorage.setItem('station_auth_status', 'true');
+      fetchTasks();
+    } else {
+      setLoginError(true);
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    sessionStorage.removeItem('station_auth_status');
+    setTasks([]);
+  };
+
   const fetchTasks = async () => {
     try {
       setLoading(true);
@@ -47,13 +81,7 @@ export default function KanbanPage() {
     }
   };
 
-  useEffect(() => {
-    fetchTasks();
-  }, []);
-
-  // 2. 태스크 상태(컬럼) 변경 (DB 즉시 반영)
   const handleMoveStatus = async (taskId: number, nextStatus: 'TODO' | 'IN_PROGRESS' | 'DONE') => {
-    // 화면 즉시 반영 (낙관적 UI)
     setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: nextStatus } : t)));
 
     const { error } = await supabase
@@ -64,11 +92,10 @@ export default function KanbanPage() {
     if (error) {
       console.error('상태 변경 실패:', error.message);
       alert(`상태 변경 실패: ${error.message}`);
-      fetchTasks(); // 롤백
+      fetchTasks();
     }
   };
 
-  // 3. 태스크 추가 (DB 즉시 반영)
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     const titleTrim = newTitle.trim();
@@ -101,7 +128,6 @@ export default function KanbanPage() {
     }
   };
 
-  // 4. 태스크 삭제 (DB 즉시 반영)
   const handleDeleteTask = async (id: number) => {
     if (!confirm('이 태스크를 삭제하시겠습니까?')) return;
 
@@ -114,7 +140,6 @@ export default function KanbanPage() {
     }
   };
 
-  // D-Day 계산 유틸리티
   const calculateDday = (targetDateStr: string | null) => {
     if (!targetDateStr) return null;
     const today = new Date();
@@ -127,9 +152,67 @@ export default function KanbanPage() {
     return `D+${Math.abs(diff)}`;
   };
 
+  if (authChecked && !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#090b10] text-[#c9d1d9] font-mono flex items-center justify-center p-4">
+        <div className="w-full max-w-md border border-[#30363d] bg-[#161b22] p-8 rounded-xl shadow-2xl space-y-6">
+          <div className="flex items-center justify-between border-b border-[#30363d] pb-4">
+            <span className="text-xs font-bold text-rose-400 tracking-wider flex items-center gap-2">
+              <span>🔒 ENCRYPTED_KANBAN_VAULT</span>
+            </span>
+            <Link href="/" className="text-xs text-[#58a6ff] hover:underline font-bold">
+              ← TERMINAL_HUB
+            </Link>
+          </div>
+
+          <div className="space-y-2">
+            <h1 className="text-base font-bold text-white">프로젝트 칸반 보드 보안 구역</h1>
+            <p className="text-xs text-[#8b949e] leading-relaxed">
+              본 모듈은 개인 프로젝트 및 진행 업무 파이프라인을 포함하고 있어 인가된 관리자 계정으로 로그인하기 전까지 비공개로 유지됩니다.
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-3 pt-2">
+            <div>
+              <label className="text-[10px] text-[#8b949e] uppercase block mb-1">OPERATOR ID</label>
+              <input
+                type="text"
+                placeholder="ID"
+                value={loginId}
+                onChange={(e) => setLoginId(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] px-3 py-2 rounded text-white text-xs focus:outline-none focus:border-[#58a6ff]"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] text-[#8b949e] uppercase block mb-1">PASSWORD</label>
+              <input
+                type="password"
+                placeholder="Password"
+                value={loginPw}
+                onChange={(e) => setLoginPw(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] px-3 py-2 rounded text-white text-xs focus:outline-none focus:border-[#58a6ff]"
+              />
+            </div>
+
+            {loginError && (
+              <div className="text-[11px] text-[#f85149]">❌ 인증 실패: 관리자 정보가 일치하지 않습니다.</div>
+            )}
+
+            <button
+              type="submit"
+              className="w-full bg-[#238636] hover:bg-[#2ea043] text-white py-2 rounded font-bold text-xs transition mt-2 shadow-lg"
+            >
+              인증 및 보안 해제 (UNLOCK)
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#090b10] text-[#c9d1d9] font-mono selection:bg-[#238636] selection:text-white p-4 md:p-8">
-      {/* 헤더 바 */}
       <header className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center gap-3">
           <Link href="/" className="text-xs text-[#58a6ff] hover:underline font-bold">
@@ -139,9 +222,12 @@ export default function KanbanPage() {
           <span className="text-sm font-bold text-white tracking-widest uppercase">
             ENGINE 05 :: KANBAN_MATRIX
           </span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1f6feb]/20 text-[#58a6ff] border border-[#1f6feb]/40">
-            SPRINT PIPELINE
-          </span>
+          <button
+            onClick={handleLogout}
+            className="text-[10px] px-2 py-0.5 rounded border border-rose-500/40 bg-rose-950/20 text-rose-300 hover:bg-rose-900/40 transition font-bold"
+          >
+            LOCK & LOGOUT
+          </button>
         </div>
 
         <div className="flex items-center gap-4 text-xs text-[#8b949e]">
@@ -150,7 +236,6 @@ export default function KanbanPage() {
         </div>
       </header>
 
-      {/* 태스크 추가 아코디언/폼 */}
       <div className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg mb-6 shadow-lg">
         <form onSubmit={handleAddTask} className="space-y-3 text-xs">
           <div className="flex flex-col sm:flex-row gap-2">
@@ -198,7 +283,6 @@ export default function KanbanPage() {
         </form>
       </div>
 
-      {/* 3열 칸반 컬럼 보드 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {COLUMNS.map((col) => {
           const colTasks = tasks.filter((t) => t.status === col.key);
@@ -208,7 +292,6 @@ export default function KanbanPage() {
               key={col.key}
               className={`border ${col.border} bg-[#161b22]/70 rounded-xl p-4 flex flex-col min-h-[500px] shadow-lg`}
             >
-              {/* 컬럼 헤더 */}
               <div className="flex items-center justify-between border-b border-[#30363d] pb-2.5 mb-3">
                 <span className={`text-xs font-bold ${col.color} tracking-wider uppercase`}>
                   {col.label}
@@ -218,7 +301,6 @@ export default function KanbanPage() {
                 </span>
               </div>
 
-              {/* 태스크 카드 스택 */}
               <div className="flex-1 space-y-3 overflow-y-auto">
                 {colTasks.length === 0 ? (
                   <div className="text-center py-12 text-[11px] text-[#8b949e]">태스크가 비어 있습니다.</div>
@@ -247,7 +329,6 @@ export default function KanbanPage() {
                           </p>
                         )}
 
-                        {/* 메타 태그 (우선순위 & D-Day) */}
                         <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[10px]">
                           <span
                             className={`px-1.5 py-0.2 rounded font-bold border ${
@@ -268,7 +349,6 @@ export default function KanbanPage() {
                           )}
                         </div>
 
-                        {/* 상태 변경 제어 바 */}
                         <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-[#21262d]">
                           {t.status !== 'TODO' && (
                             <button

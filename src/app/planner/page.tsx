@@ -22,9 +22,16 @@ const CATEGORY_MAP: Record<string, { label: string; bg: string; border: string; 
   REST: { label: 'REST', bg: 'bg-[#30363d]/40', border: 'border-[#484f58]', text: 'text-[#8b949e]' },
 };
 
-const HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 06:00 ~ 23:00
+const HOURS = Array.from({ length: 18 }, (_, i) => i + 6);
 
 export default function PlannerPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [authChecked, setAuthChecked] = useState<boolean>(false);
+
+  const [loginId, setLoginId] = useState<string>('');
+  const [loginPw, setLoginPw] = useState<string>('');
+  const [loginError, setLoginError] = useState<boolean>(false);
+
   const [targetDate, setTargetDate] = useState<string>('');
   const [todayStr, setTodayStr] = useState<string>('');
   const [blocks, setBlocks] = useState<TimeBlock[]>([]);
@@ -49,6 +56,10 @@ export default function PlannerPage() {
       setTargetDate(nowFormatted);
       setTodayStr(nowFormatted);
 
+      const auth = sessionStorage.getItem('station_auth_status') === 'true';
+      setIsAuthenticated(auth);
+      setAuthChecked(true);
+
       const updateTimeLine = () => {
         const d = new Date();
         const h = d.getHours();
@@ -64,6 +75,26 @@ export default function PlannerPage() {
       return () => clearInterval(timer);
     }
   }, []);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loginId === 'ddan1218' && loginPw === 'TLSALSWHD') {
+      setIsAuthenticated(true);
+      setLoginError(false);
+      sessionStorage.setItem('station_auth_status', 'true');
+      if (targetDate) {
+        fetchBlocks(targetDate);
+      }
+    } else {
+      setLoginError(true);
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    sessionStorage.removeItem('station_auth_status');
+    setBlocks([]);
+  };
 
   const fetchBlocks = async (dateStr: string) => {
     if (!dateStr) return;
@@ -86,10 +117,10 @@ export default function PlannerPage() {
   };
 
   useEffect(() => {
-    if (targetDate) {
+    if (targetDate && isAuthenticated) {
       fetchBlocks(targetDate);
     }
-  }, [targetDate]);
+  }, [targetDate, isAuthenticated]);
 
   const handleAddBlock = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,6 +164,65 @@ export default function PlannerPage() {
     }
   };
 
+  if (authChecked && !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#090b10] text-[#c9d1d9] font-mono flex items-center justify-center p-4">
+        <div className="w-full max-w-md border border-[#30363d] bg-[#161b22] p-8 rounded-xl shadow-2xl space-y-6">
+          <div className="flex items-center justify-between border-b border-[#30363d] pb-4">
+            <span className="text-xs font-bold text-rose-400 tracking-wider flex items-center gap-2">
+              <span>🔒 ENCRYPTED_PLANNER_VAULT</span>
+            </span>
+            <Link href="/" className="text-xs text-[#58a6ff] hover:underline font-bold">
+              ← TERMINAL_HUB
+            </Link>
+          </div>
+
+          <div className="space-y-2">
+            <h1 className="text-base font-bold text-white">24H 타임블록 플래너 보안 구역</h1>
+            <p className="text-xs text-[#8b949e] leading-relaxed">
+              본 모듈은 개인 하루 24시간 타임블록 일정을 포함하고 있어 인가된 관리자 계정으로 로그인하기 전까지 비공개로 유지됩니다.
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-3 pt-2">
+            <div>
+              <label className="text-[10px] text-[#8b949e] uppercase block mb-1">OPERATOR ID</label>
+              <input
+                type="text"
+                placeholder="ID"
+                value={loginId}
+                onChange={(e) => setLoginId(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] px-3 py-2 rounded text-white text-xs focus:outline-none focus:border-[#58a6ff]"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] text-[#8b949e] uppercase block mb-1">PASSWORD</label>
+              <input
+                type="password"
+                placeholder="Password"
+                value={loginPw}
+                onChange={(e) => setLoginPw(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] px-3 py-2 rounded text-white text-xs focus:outline-none focus:border-[#58a6ff]"
+              />
+            </div>
+
+            {loginError && (
+              <div className="text-[11px] text-[#f85149]">❌ 인증 실패: 관리자 정보가 일치하지 않습니다.</div>
+            )}
+
+            <button
+              type="submit"
+              className="w-full bg-[#238636] hover:bg-[#2ea043] text-white py-2 rounded font-bold text-xs transition mt-2 shadow-lg"
+            >
+              인증 및 보안 해제 (UNLOCK)
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#090b10] text-[#c9d1d9] font-mono selection:bg-[#238636] selection:text-white p-4 md:p-8">
       <header className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
@@ -144,9 +234,12 @@ export default function PlannerPage() {
           <span className="text-sm font-bold text-white tracking-widest uppercase">
             ENGINE 06 :: TIME_BLOCKS
           </span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#f0883e]/20 text-[#f0883e] border border-[#f0883e]/40">
-            24H PLANNER
-          </span>
+          <button
+            onClick={handleLogout}
+            className="text-[10px] px-2 py-0.5 rounded border border-rose-500/40 bg-rose-950/20 text-rose-300 hover:bg-rose-900/40 transition font-bold"
+          >
+            LOCK & LOGOUT
+          </button>
         </div>
 
         <div className="flex items-center gap-2 text-xs">
@@ -164,7 +257,7 @@ export default function PlannerPage() {
         <form onSubmit={handleAddBlock} className="flex flex-col sm:flex-row gap-2 items-center text-xs">
           <input
             type="text"
-            placeholder="블록 일정 명칭 (예: 컴파일러 과제, 헬스장 등)..."
+            placeholder="블록 일정 명칭..."
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="w-full flex-1 bg-[#0d1117] border border-[#30363d] px-3 py-2 rounded text-white text-xs focus:outline-none focus:border-[#58a6ff]"

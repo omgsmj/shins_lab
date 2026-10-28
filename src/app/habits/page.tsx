@@ -30,6 +30,13 @@ const CATEGORIES = [
 ];
 
 export default function HabitsPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [authChecked, setAuthChecked] = useState<boolean>(false);
+
+  const [loginId, setLoginId] = useState<string>('');
+  const [loginPw, setLoginPw] = useState<string>('');
+  const [loginError, setLoginError] = useState<boolean>(false);
+
   const [habits, setHabits] = useState<Habit[]>([]);
   const [logs, setLogs] = useState<HabitLog[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -61,9 +68,35 @@ export default function HabitsPage() {
 
       setRecentDays(days);
       setTodayStr(days[6].dateStr);
-      fetchHabitsAndLogs();
+
+      const auth = sessionStorage.getItem('station_auth_status') === 'true';
+      setIsAuthenticated(auth);
+      setAuthChecked(true);
+
+      if (auth) {
+        fetchHabitsAndLogs();
+      }
     }
   }, []);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loginId === 'ddan1218' && loginPw === 'TLSALSWHD') {
+      setIsAuthenticated(true);
+      setLoginError(false);
+      sessionStorage.setItem('station_auth_status', 'true');
+      fetchHabitsAndLogs();
+    } else {
+      setLoginError(true);
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    sessionStorage.removeItem('station_auth_status');
+    setHabits([]);
+    setLogs([]);
+  };
 
   const fetchHabitsAndLogs = async () => {
     try {
@@ -189,6 +222,65 @@ export default function HabitsPage() {
     return streak;
   };
 
+  if (authChecked && !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#090b10] text-[#c9d1d9] font-mono flex items-center justify-center p-4">
+        <div className="w-full max-w-md border border-[#30363d] bg-[#161b22] p-8 rounded-xl shadow-2xl space-y-6">
+          <div className="flex items-center justify-between border-b border-[#30363d] pb-4">
+            <span className="text-xs font-bold text-rose-400 tracking-wider flex items-center gap-2">
+              <span>🔒 ENCRYPTED_HABITS_VAULT</span>
+            </span>
+            <Link href="/" className="text-xs text-[#58a6ff] hover:underline font-bold">
+              ← TERMINAL_HUB
+            </Link>
+          </div>
+
+          <div className="space-y-2">
+            <h1 className="text-base font-bold text-white">개인 습관 & 루틴 매트릭스 보안 구역</h1>
+            <p className="text-xs text-[#8b949e] leading-relaxed">
+              본 모듈은 개인 생활 습관 및 루틴 스트릭 데이터를 보호하기 위해 관리자 계정으로 로그인하기 전까지 비공개로 유지됩니다.
+            </p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-3 pt-2">
+            <div>
+              <label className="text-[10px] text-[#8b949e] uppercase block mb-1">OPERATOR ID</label>
+              <input
+                type="text"
+                placeholder="ID"
+                value={loginId}
+                onChange={(e) => setLoginId(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] px-3 py-2 rounded text-white text-xs focus:outline-none focus:border-[#58a6ff]"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] text-[#8b949e] uppercase block mb-1">PASSWORD</label>
+              <input
+                type="password"
+                placeholder="Password"
+                value={loginPw}
+                onChange={(e) => setLoginPw(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] px-3 py-2 rounded text-white text-xs focus:outline-none focus:border-[#58a6ff]"
+              />
+            </div>
+
+            {loginError && (
+              <div className="text-[11px] text-[#f85149]">❌ 인증 실패: 관리자 정보가 일치하지 않습니다.</div>
+            )}
+
+            <button
+              type="submit"
+              className="w-full bg-[#238636] hover:bg-[#2ea043] text-white py-2 rounded font-bold text-xs transition mt-2 shadow-lg"
+            >
+              인증 및 보안 해제 (UNLOCK)
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   const todayDoneCount = habits.filter((h) =>
     logs.some((l) => l.habit_id === h.id && l.completed_date === todayStr)
   ).length;
@@ -205,9 +297,12 @@ export default function HabitsPage() {
           <span className="text-sm font-bold text-white tracking-widest uppercase">
             ENGINE 04 :: HABIT_MATRIX
           </span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#238636]/20 text-[#7ee787] border border-[#238636]/40">
-            STREAK ACTIVE
-          </span>
+          <button
+            onClick={handleLogout}
+            className="text-[10px] px-2 py-0.5 rounded border border-rose-500/40 bg-rose-950/20 text-rose-300 hover:bg-rose-900/40 transition font-bold"
+          >
+            LOCK & LOGOUT
+          </button>
         </div>
 
         <div className="flex items-center gap-4 text-xs">
@@ -266,7 +361,7 @@ export default function HabitsPage() {
 
           <input
             type="text"
-            placeholder="매일 실천할 새로운 루틴 입력 (예: 영양제 복용, 헬스 1시간, 단어 암기)..."
+            placeholder="매일 실천할 새로운 루틴 입력..."
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             className="w-full flex-1 bg-[#0d1117] border border-[#30363d] px-3 py-2 rounded text-white text-xs focus:outline-none focus:border-[#7ee787]"
