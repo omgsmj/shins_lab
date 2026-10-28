@@ -1173,7 +1173,7 @@ export default function EngineeringHub() {
               <span className="text-xs font-bold text-[#8b949e] uppercase">SCHEDULED_EVENTS_QUEUE</span>
               <span className="text-[10px] text-[#238636]">STORAGE: HYBRID_SYNC</span>
             </div>
-            <div className="space-y-2 max-h-60 overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-[#0d1117] [&::webkit-scrollbar-thumnb]:bg-[#30363d] [&::-webkit-scrollbar-thumb]:rounded hover:[&webkit-scrollbar-thumb]:bg-[#484f58]">
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#0d1117] [&::-webkit-scrollbar-track]:rounded-full [&::webkit-scrollbar-thumnb]:bg-[#1f6feb] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&webkit-scrollbar-thumb]:bg-[#388bfd] [&::webkit-scrollbar-thumb]:border [&::-webkit-scrollbar-thumb]:border-[#161b22]">
               {schedules.map((s) => (
                 <div
                   key={s.id}
@@ -1368,7 +1368,7 @@ export default function EngineeringHub() {
               </div>
             )}
 
-            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#0d1117] [&::-webkit-scrollbar-track]:rounded-full [&::webkit-scrollbar-thumb]:bg-[#6e40c9] [&::webkit-scrollbar-thumb]:rounded-full hover:[&::webkit-scrollbar-thumb]:bg-[#8957e5] [&::-webkit-scrollbar-thumb]:border [&::-webkit-scrollbar-thumb]:border-[#161b22]">
               {studyLogs.length === 0 ? (
                 <div className="text-[11px] text-[#8b949e] py-4 text-center">등록된 학습 게시물이 없습니다.</div>
               ) : (
