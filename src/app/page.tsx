@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { verifyAdmin } from '@/lib/auth';
 
 interface ScheduleItem {
   id: number;
@@ -43,6 +44,7 @@ const DEFAULT_SCHEDULES: ScheduleItem[] = [
 
 export default function EngineeringHub() {
   const [isMounted, setIsMounted] = useState<boolean>(false);
+  const [todayDate, setTodayDate] = useState<Date | null>(null);
 
   // 1. 관리자 통합 인증 상태
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -85,19 +87,19 @@ export default function EngineeringHub() {
 
   // 6. 올해/이달의 목표
   const [yearlyGoal, setYearlyGoal] = useState<string>('2026 목표: 정보처리기사 취득 및 컴퓨터비전 취업 포트폴리오 완성');
-  const [monthlyGoal, setMonthlyGoal] = useState<string>('10월 목표: CBT 엔진 고도화 및 전주대 날씨 과제 아키텍처 배포');
+  const [monthlyGoal, setMonthlyGoal] = useState<string>('11월 목표: CBT 엔진 고도화 및 취업 포트폴리오 파이프라인 검증');
   const [isEditingGoals, setIsEditingGoals] = useState<boolean>(false);
 
-  // 7. 달력 및 일정 (D-Day 포함)
+  // 7. 달력 및 일정
   const [schedules, setSchedules] = useState<ScheduleItem[]>(DEFAULT_SCHEDULES);
-  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 9, 28));
+  const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 10, 1));
   const [newTitle, setNewTitle] = useState<string>('');
-  const [newDate, setNewDate] = useState<string>('2026-10-28');
+  const [newDate, setNewDate] = useState<string>('');
   const [newCategory, setNewCategory] = useState<'DEV' | 'ACADEMIC' | 'PERSONAL'>('DEV');
   const [newIsDday, setNewIsDday] = useState<boolean>(false);
   const [isDdayHovered, setIsDdayHovered] = useState<boolean>(false);
 
-  // 8. 다기능 크로노 모듈 (타이머 vs 스톱워치)
+  // 8. 다기능 크로노 모듈
   const [clockMode, setClockMode] = useState<'TIMER' | 'STOPWATCH'>('TIMER');
   const [customMinInput, setCustomMinInput] = useState<number>(25);
   const [timerLeft, setTimerLeft] = useState<number>(25 * 60);
@@ -107,7 +109,7 @@ export default function EngineeringHub() {
 
   // 9. 학습 로그 게시판
   const [studyLogs, setStudyLogs] = useState<StudyBoardLog[]>([]);
-  const [logDate, setLogDate] = useState<string>('2026-10-28');
+  const [logDate, setLogDate] = useState<string>('');
   const [logSubject, setLogSubject] = useState<string>('정처기 CBT');
   const [logHours, setLogHours] = useState<number>(1);
   const [logMinutes, setLogMinutes] = useState<number>(30);
@@ -122,8 +124,21 @@ export default function EngineeringHub() {
     '// QUICK SCRATCHPAD (Auto-saved)\n$ python -m venv venv\n$ pip install -r requirements.txt'
   );
 
+  // 브라우저 마운트 시 단 1회 현재 실제 KST 날짜 확정 주입
   useEffect(() => {
     setIsMounted(true);
+    if (typeof window !== 'undefined') {
+      const now = new Date();
+      setTodayDate(now);
+      setCurrentDate(now);
+
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const todayFormatted = `${yyyy}-${mm}-${dd}`;
+      setNewDate(todayFormatted);
+      setLogDate(todayFormatted);
+    }
   }, []);
 
   const playClickSound = () => {
@@ -339,11 +354,10 @@ export default function EngineeringHub() {
     syncRemoteData();
   }, []);
 
-  // 계정 검증 로직 (ddan1218 / TLSALSWHD)
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     playClickSound();
-    if (adminId === 'ddan1218' && adminPw === 'TLSALSWHD') {
+    if (verifyAdmin(adminId, adminPw)) {
       setIsAuthenticated(true);
       setAuthError(false);
       setShowLoginModal(false);
@@ -593,13 +607,14 @@ export default function EngineeringHub() {
     setTasks((prev) => prev.filter((t) => t.id !== id));
   };
 
+  // 방어적 D-Day 연산
   const calculateDday = (targetDateStr: string) => {
     if (!targetDateStr) return 'D-DAY';
     try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
       const parts = targetDateStr.split('-');
       if (parts.length < 3) return 'D-DAY';
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
       const target = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
       target.setHours(0, 0, 0, 0);
       const diffTime = target.getTime() - today.getTime();
@@ -664,11 +679,11 @@ export default function EngineeringHub() {
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-  const currentMonthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+  // 실제 현재 날짜 기준
+  const activeNow = todayDate || new Date(2026, 10, 5);
+  const activeCurrentMonthKey = `${activeNow.getFullYear()}-${String(activeNow.getMonth() + 1).padStart(2, '0')}`;
 
-  const currentMonthLogs = studyLogs.filter((log) => log.date.startsWith(currentMonthKey));
+  const currentMonthLogs = studyLogs.filter((log) => log.date.startsWith(activeCurrentMonthKey));
   const currentMonthTotalMinutes = currentMonthLogs.reduce((acc, cur) => acc + cur.durationHours * 60 + cur.durationMinutes, 0);
 
   const subjectMap: Record<string, number> = {};
@@ -677,12 +692,15 @@ export default function EngineeringHub() {
     subjectMap[l.subject] = (subjectMap[l.subject] || 0) + mins;
   });
 
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
   const firstDayIndex = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
   const ddayItems = schedules.filter((s) => s.isDday);
 
+  // 최근 84일 잔디 히트맵
   const studyDateMinutesMap: Record<string, number> = {};
   studyLogs.forEach((l) => {
     const mins = l.durationHours * 60 + l.durationMinutes;
@@ -690,8 +708,8 @@ export default function EngineeringHub() {
   });
 
   const heatmapDays = Array.from({ length: 84 }, (_, idx) => {
-    const d = new Date(2026, 9, 28);
-    d.setDate(d.getDate() - (83 - idx));
+    const d = new Date(activeNow);
+    d.setDate(activeNow.getDate() - (83 - idx));
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
@@ -702,6 +720,15 @@ export default function EngineeringHub() {
 
   const completedTasksCount = tasks.filter((t) => t.is_completed).length;
   const taskProgressPct = tasks.length > 0 ? Math.round((completedTasksCount / tasks.length) * 100) : 0;
+
+  const isActualToday = (d: number) => {
+    if (!todayDate) return false;
+    return (
+      todayDate.getFullYear() === year &&
+      todayDate.getMonth() === month &&
+      todayDate.getDate() === d
+    );
+  };
 
   return (
     <div className="min-h-screen bg-[#090b10] text-[#c9d1d9] font-mono selection:bg-[#238636] selection:text-white p-4 md:p-8">
@@ -857,9 +884,8 @@ export default function EngineeringHub() {
         </div>
       </header>
 
-      {/* 2. 풀스택 6대 엔지니어링 서브시스템 카드 그리드 (2열 x 3행) */}
+      {/* 2. 풀스택 6대 엔지니어링 서브시스템 카드 그리드 */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-        {/* ENGINE 01: CBT 통합 시스템 */}
         <Link
           href="/cbt"
           onClick={playClickSound}
@@ -875,7 +901,6 @@ export default function EngineeringHub() {
           <div className="text-xs text-[#8b949e] mt-1">시험 응시 · 오답노트 보관함 통합</div>
         </Link>
 
-        {/* ENGINE 02: 전주대 기상 관측소 */}
         <Link
           href="/weather"
           onClick={playClickSound}
@@ -891,7 +916,6 @@ export default function EngineeringHub() {
           <div className="text-xs text-[#8b949e] mt-1">캠퍼스(효자동) 실시간 기상 관측 및 단기 예보</div>
         </Link>
 
-        {/* ENGINE 03: 스마트 가계부 & 예산 (보안 구역) */}
         <Link
           href="/ledger"
           onClick={playClickSound}
@@ -907,7 +931,6 @@ export default function EngineeringHub() {
           <div className="text-xs text-[#8b949e] mt-1">지출 기록 · 가용 예산 추적 · 비밀번호 보호</div>
         </Link>
 
-        {/* ENGINE 04: 습관 & 루틴 매트릭스 (보안 구역) */}
         <Link
           href="/habits"
           onClick={playClickSound}
@@ -923,7 +946,6 @@ export default function EngineeringHub() {
           <div className="text-xs text-[#8b949e] mt-1">데일리 루틴 체크 · 7일간의 연속 달성 추적</div>
         </Link>
 
-        {/* ENGINE 05: 프로젝트 칸반 보드 (보안 구역) */}
         <Link
           href="/kanban"
           onClick={playClickSound}
@@ -939,7 +961,6 @@ export default function EngineeringHub() {
           <div className="text-xs text-[#8b949e] mt-1">TODO ➔ IN PROGRESS ➔ DONE 3단계 관리</div>
         </Link>
 
-        {/* ENGINE 06: 24H 타임블록 플래너 (보안 구역) */}
         <Link
           href="/planner"
           onClick={playClickSound}
@@ -958,9 +979,8 @@ export default function EngineeringHub() {
 
       {/* 메인 2열 그리드 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* [좌측 7열]: 올해/이달 목표 + 달력 + 히트맵 잔디밭 + 학습 통계 및 로그 */}
         <section className="lg:col-span-7 space-y-6">
-          {/* 달력 상단: 목표 보드 */}
+          {/* 목표 보드 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-4 shadow-lg">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-2 mb-3">
               <span className="text-xs font-bold text-[#58a6ff] uppercase tracking-wider flex items-center gap-1.5">
@@ -1019,7 +1039,7 @@ export default function EngineeringHub() {
             </div>
           </div>
 
-          {/* 달력 컨테이너 (비로그인 시 블러 처리) */}
+          {/* 달력 컨테이너 */}
           <div className="relative border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg overflow-hidden">
             {!isAuthenticated && (
               <div className="absolute inset-0 z-30 bg-black/60 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center">
@@ -1085,7 +1105,7 @@ export default function EngineeringHub() {
                 {daysArray.map((d) => {
                   const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                   const matchedSchedules = schedules.filter((s) => s.date === dateKey);
-                  const isToday = d === 28 && month === 9;
+                  const isToday = isActualToday(d);
 
                   return (
                     <div
@@ -1097,13 +1117,16 @@ export default function EngineeringHub() {
                       }}
                       className={`min-h-[72px] border rounded p-1 text-left flex flex-col justify-start cursor-pointer transition overflow-hidden ${
                         isToday
-                          ? 'border-[#58a6ff] bg-[#58a6ff]/10 font-bold text-white'
+                          ? 'border-[#58a6ff] bg-[#58a6ff]/10 font-bold text-white ring-1 ring-[#58a6ff]'
                           : matchedSchedules.length > 0
                           ? 'border-[#30363d] bg-[#21262d]/60 text-[#c9d1d9]'
                           : 'border-[#21262d] bg-[#0d1117]/50 text-[#8b949e] hover:border-[#30363d]'
                       }`}
                     >
-                      <span className="text-[10px] mb-1 font-mono">{d}</span>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-mono">{d}</span>
+                        {isToday && <span className="text-[8px] bg-[#58a6ff] text-black px-1 rounded font-bold">TODAY</span>}
+                      </div>
                       <div className="space-y-1 w-full">
                         {matchedSchedules.map((s) => (
                           <div
@@ -1170,7 +1193,7 @@ export default function EngineeringHub() {
             </div>
           </div>
 
-          {/* 등록된 일정 큐 리스트 (비로그인 시 블러 처리) */}
+          {/* 등록된 일정 큐 리스트 */}
           <div className="relative border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg overflow-hidden">
             {!isAuthenticated && (
               <div className="absolute inset-0 z-20 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -1225,7 +1248,7 @@ export default function EngineeringHub() {
             </div>
           </div>
 
-          {/* 공부 기록 잔디밭 */}
+          {/* 잔디 히트맵 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-4 shadow-lg space-y-4">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-2">
               <div className="flex items-center gap-2">
@@ -1233,7 +1256,7 @@ export default function EngineeringHub() {
                 <span className="text-[10px] text-[#8b949e]">(최근 12주간 잔디 심기)</span>
               </div>
               <span className="text-xs font-bold text-[#7ee787]">
-                총 {Math.floor(currentMonthTotalMinutes / 60)}h {currentMonthTotalMinutes % 60}m (당월)
+                총 {Math.floor(currentMonthTotalMinutes / 60)}h {currentMonthTotalMinutes % 60}m ({activeNow.getMonth() + 1}월 누적)
               </span>
             </div>
 
@@ -1418,9 +1441,8 @@ export default function EngineeringHub() {
           </div>
         </section>
 
-        {/* [우측 5열]: 크로노 모듈 + 프로필/자소서 + 투두 체크리스트 + 커플 텔레메트리 + 스크래치패드 */}
+        {/* [우측 5열] */}
         <section className="lg:col-span-5 space-y-6">
-          {/* 다기능 크로노 모듈 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-2 mb-3">
               <div className="flex gap-1">
@@ -1545,7 +1567,7 @@ export default function EngineeringHub() {
             )}
           </div>
 
-          {/* 대표 프로필 & 자소서 금고 */}
+          {/* 프로필 & 자소서 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-3 mb-4">
               <span className="text-sm font-bold text-white tracking-wider">ENGINEER_DOSSIER</span>
@@ -1628,7 +1650,6 @@ export default function EngineeringHub() {
               </div>
             </div>
 
-            {/* 보안 인증 락커 & 자소서 금고 */}
             <div className="border border-[#30363d] bg-[#0d1117] rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="text-xs font-bold text-white flex items-center gap-1.5">
@@ -1675,7 +1696,7 @@ export default function EngineeringHub() {
             </div>
           </div>
 
-          {/* 오늘의 엔지니어링 투두 체크리스트 (비로그인 시 블러 처리) */}
+          {/* 데일리 체크리스트 */}
           <div className="relative border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg space-y-3 overflow-hidden">
             {!isAuthenticated && (
               <div className="absolute inset-0 z-20 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -1754,7 +1775,7 @@ export default function EngineeringHub() {
             </div>
           </div>
 
-          {/* 대문 오른쪽 아래: 커플 텔레메트리 & 마일스톤 */}
+          {/* 커플 마일스톤 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-2 mb-3">
               <span className="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -1800,7 +1821,7 @@ export default function EngineeringHub() {
             </div>
           </div>
 
-          {/* 엔지니어링 스크래치패드 */}
+          {/* 스크래치패드 */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-[#8b949e] uppercase">SCRATCHPAD (CLI_NOTES)</span>
