@@ -186,7 +186,7 @@ export default function CampusWeatherStation() {
                 <div className="space-y-3 my-4 text-xs">
                   <div className="flex justify-between border-b border-[#21262d] pb-1.5">
                     <span className="text-[#8b949e]">TARGET_SITE:</span>
-                    <span className="text-white">전주대학교 공학관 / 인공지능학과</span>
+                    <span className="text-white">전주대학교 진리관 / 일본언어문화학과</span>
                   </div>
                   <div className="flex justify-between border-b border-[#21262d] pb-1.5">
                     <span className="text-[#8b949e]">GEO_COORDINATES:</span>
