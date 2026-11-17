@@ -239,13 +239,25 @@ useEffect(() => {
           }
 
           setWeatherStr(`${temp}°C (${desc}, ${wind}km/h)`);
-          setWeatherAlert({ active: alertActive, msg: alertMsg, type: alertType });
 
-          // 특보 활성화 시 10초(10000ms) 후 자동 닫힘
-          if (alertActive) {
+          const alertAckKey = `weather_alert_seen_${alertType}`;
+          const alreadySeen = sessionStorage.getItem(alertAckKey) === 'true';
+
+          if (alertActive && !alreadySeen) {
+            setWeatherAlert({ active: true, msg: alertMsg, type: alertType });
+            sessionStorage.setItem(alertAckKey, 'true');
+
             alertTimer = setTimeout(() => {
               setWeatherAlert((prev) => ({ ...prev, active: false }));
             }, 10000);
+          } else {
+            setWeatherAlert({ active: false, msg: alertMsg, type: alertType });
+            if (!alertActive) {
+              // 특보 해제 시 추후 재발생을 위해 세션 기록 초기화
+              sessionStorage.removeItem('weather_alert_seen_rain');
+              sessionStorage.removeItem('weather_alert_seen_snow');
+              sessionStorage.removeItem('weather_alert_seen_storm');
+            }
           }
         } else {
           setWeatherStr('WEATHER OFFLINE');
@@ -261,6 +273,7 @@ useEffect(() => {
       if (alertTimer) clearTimeout(alertTimer);
     };
   }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
