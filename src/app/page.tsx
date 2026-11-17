@@ -202,14 +202,12 @@ export default function EngineeringHub() {
     return () => clearInterval(interval);
   }, [isStopwatchRunning]);
 
-  useEffect(() => {
+useEffect(() => {
     const fetchJeonjuWeather = async () => {
       try {
-        const res = await fetch(
-          'https://api.open-meteo.com/v1/forecast?latitude=35.8242&longitude=127.148&current=temperature_2m,weather_code,wind_speed_10m'
-        );
+        const res = await fetch('/api/weather', { cache: 'no-store' });
         const data = await res.json();
-        if (data && data.current) {
+        if (res.ok && data && data.current) {
           const temp = data.current.temperature_2m;
           const wind = data.current.wind_speed_10m;
           const code = data.current.weather_code;
@@ -240,6 +238,8 @@ export default function EngineeringHub() {
 
           setWeatherStr(`${temp}°C (${desc}, ${wind}km/h)`);
           setWeatherAlert({ active: alertActive, msg: alertMsg, type: alertType });
+        } else {
+          setWeatherStr('WEATHER OFFLINE');
         }
       } catch (err) {
         setWeatherStr('WEATHER OFFLINE');
