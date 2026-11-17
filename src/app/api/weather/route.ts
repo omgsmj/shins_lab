@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic';
-
 export async function GET() {
   const LATITUDE = 35.8145;
   const LONGITUDE = 127.091;
@@ -37,7 +35,6 @@ export async function GET() {
       const wData = await backupRes.json();
       const cur = wData.current_condition[0];
       
-      // Open-Meteo 데이터 포맷과 동일하게 정규화(Normalize)
       const normalized = {
         source: 'wttr-backup',
         current: {
