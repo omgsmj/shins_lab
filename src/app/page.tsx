@@ -203,6 +203,8 @@ export default function EngineeringHub() {
   }, [isStopwatchRunning]);
 
 useEffect(() => {
+    let alertTimer: NodeJS.Timeout;
+
     const fetchJeonjuWeather = async () => {
       try {
         const res = await fetch('/api/weather', { cache: 'no-store' });
@@ -238,6 +240,13 @@ useEffect(() => {
 
           setWeatherStr(`${temp}°C (${desc}, ${wind}km/h)`);
           setWeatherAlert({ active: alertActive, msg: alertMsg, type: alertType });
+
+          // 특보 활성화 시 10초(10000ms) 후 자동 닫힘
+          if (alertActive) {
+            alertTimer = setTimeout(() => {
+              setWeatherAlert((prev) => ({ ...prev, active: false }));
+            }, 10000);
+          }
         } else {
           setWeatherStr('WEATHER OFFLINE');
         }
@@ -245,9 +254,13 @@ useEffect(() => {
         setWeatherStr('WEATHER OFFLINE');
       }
     };
-    fetchJeonjuWeather();
-  }, []);
 
+    fetchJeonjuWeather();
+
+    return () => {
+      if (alertTimer) clearTimeout(alertTimer);
+    };
+  }, []);
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
