@@ -26,9 +26,22 @@ export default function CampusWeatherStation() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>('');
 
-  // 전주대학교 공학관 기준 좌표 (전주시 완산구 효자동3가)
+  // 전주대학교 진리관 기준 좌표 (전주시 완산구 효자동3가)
   const LATITUDE = 35.8145;
   const LONGITUDE = 127.091;
+
+  const fetchWithRetry = async (url: string, retries = 3, delay = 1000): Promise<Response> => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (res.ok) return res;
+      } catch (err) {
+        if (i === retries - 1) throw err;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+    throw new Error('기상 서버 응답 시간 초과 (네트워크 상태를 확인하세요)');
+  };
 
   const fetchCampusTelemetry = async () => {
     setLoading(true);
@@ -36,9 +49,7 @@ export default function CampusWeatherStation() {
     try {
       const endpoint = `https://api.open-meteo.com/v1/forecast?latitude=${LATITUDE}&longitude=${LONGITUDE}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,uv_index&hourly=temperature_2m,precipitation_probability&timezone=Asia%2FSeoul&forecast_days=2`;
       
-      const res = await fetch(endpoint);
-      if (!res.ok) throw new Error('기상청 통신 실패: 상태 코드 ' + res.status);
-      
+      const res = await fetchWithRetry(endpoint);
       const data = await res.json();
       
       if (data && data.current) {
@@ -70,8 +81,12 @@ export default function CampusWeatherStation() {
         setLastUpdated(new Date().toLocaleTimeString('ko-KR'));
       }
     } catch (err: unknown) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : '데이터 동기화 실패');
+      console.error('기상 API 통신 오류:', err);
+      setError(
+        err instanceof Error
+          ? `${err.message} (브라우저 광고 차단기나 방화벽이 api.open-meteo.com을 차단 중인지 확인하십시오)`
+          : '데이터 동기화 실패'
+      );
     } finally {
       setLoading(false);
     }
@@ -124,8 +139,14 @@ export default function CampusWeatherStation() {
         </header>
 
         {error ? (
-          <div className="border border-rose-500/40 bg-rose-950/20 rounded-lg p-6 text-center text-xs text-rose-400">
-            ❌ 텔레메트리 링크 오류: {error}
+          <div className="border border-rose-500/40 bg-rose-950/20 rounded-lg p-6 text-center space-y-3">
+            <div className="text-xs text-rose-400 font-bold">❌ 텔레메트리 링크 오류: {error}</div>
+            <button
+              onClick={fetchCampusTelemetry}
+              className="text-xs px-3 py-1.5 rounded bg-rose-950/60 border border-rose-500/50 text-rose-200 hover:bg-rose-900/60 transition"
+            >
+              재연결 시도 (RETRY)
+            </button>
           </div>
         ) : loading && !current ? (
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-16 text-center text-xs text-[#8b949e]">
