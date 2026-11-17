@@ -25,34 +25,30 @@ export default function CampusWeatherStation() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [dataSource, setDataSource] = useState<string>('Open-Meteo High-Resolution Model');
 
-  // 전주대학교 진리관 기준 좌표 (전주시 완산구 효자동3가)
   const LATITUDE = 35.8145;
   const LONGITUDE = 127.091;
-
-  const fetchWithRetry = async (url: string, retries = 3, delay = 1000): Promise<Response> => {
-    for (let i = 0; i < retries; i++) {
-      try {
-        const res = await fetch(url, { cache: 'no-store' });
-        if (res.ok) return res;
-      } catch (err) {
-        if (i === retries - 1) throw err;
-      }
-      await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-    throw new Error('기상 서버 응답 시간 초과 (네트워크 상태를 확인하세요)');
-  };
 
   const fetchCampusTelemetry = async () => {
     setLoading(true);
     setError(null);
     try {
-      const endpoint = `https://api.open-meteo.com/v1/forecast?latitude=${LATITUDE}&longitude=${LONGITUDE}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,uv_index&hourly=temperature_2m,precipitation_probability&timezone=Asia%2FSeoul&forecast_days=2`;
-      
-      const res = await fetchWithRetry(endpoint);
+      // 외부 API 직접 호출 대신 Next.js 내부 서버 프록시 경유
+      const res = await fetch('/api/weather', { cache: 'no-store' });
       const data = await res.json();
-      
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error || `서버 응답 오류 (${res.status})`);
+      }
+
       if (data && data.current) {
+        if (data.source === 'wttr-backup') {
+          setDataSource('wttr.in Meteorological Backup Feed');
+        } else {
+          setDataSource('Open-Meteo High-Resolution Model');
+        }
+
         setCurrent({
           temperature: data.current.temperature_2m,
           apparentTemperature: data.current.apparent_temperature,
@@ -63,11 +59,10 @@ export default function CampusWeatherStation() {
           time: data.current.time,
         });
 
-        // 향후 24시간 시간대별 데이터 파싱
         const nowHourIndex = new Date().getHours();
         const hourlyList: HourlyForecast[] = [];
         for (let i = nowHourIndex; i < nowHourIndex + 24; i++) {
-          if (data.hourly.time[i]) {
+          if (data.hourly?.time?.[i]) {
             const rawTime = data.hourly.time[i];
             const hourLabel = rawTime.split('T')[1].substring(0, 5);
             hourlyList.push({
@@ -81,12 +76,8 @@ export default function CampusWeatherStation() {
         setLastUpdated(new Date().toLocaleTimeString('ko-KR'));
       }
     } catch (err: unknown) {
-      console.error('기상 API 통신 오류:', err);
-      setError(
-        err instanceof Error
-          ? `${err.message} (브라우저 광고 차단기나 방화벽이 api.open-meteo.com을 차단 중인지 확인하십시오)`
-          : '데이터 동기화 실패'
-      );
+      console.error('기상 텔레메트리 오류:', err);
+      setError(err instanceof Error ? err.message : '데이터 동기화 실패');
     } finally {
       setLoading(false);
     }
@@ -96,7 +87,6 @@ export default function CampusWeatherStation() {
     fetchCampusTelemetry();
   }, []);
 
-  // WMO 기상 코드 해석기
   const interpretWeatherCode = (code: number) => {
     if (code === 0) return { label: '맑음 (CLEAR SKY)', color: 'text-amber-400', desc: '야외 활동 적합' };
     if (code >= 1 && code <= 3) return { label: '구름 많음 (PARTLY CLOUDY)', color: 'text-slate-300', desc: '일조량 보통' };
@@ -112,7 +102,6 @@ export default function CampusWeatherStation() {
 
   return (
     <div className="min-h-screen bg-[#090b10] text-[#c9d1d9] font-mono p-4 md:p-8 selection:bg-[#238636] selection:text-white">
-      {/* 헤더 & 네비게이션 */}
       <div className="mx-auto max-w-5xl space-y-6">
         <header className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
           <div className="flex items-center gap-3">
@@ -154,9 +143,7 @@ export default function CampusWeatherStation() {
           </div>
         ) : current && (
           <>
-            {/* 실시간 캠퍼스 관측 메인 패널 */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-              {/* 현재 상태 코어 카드 */}
               <div className="md:col-span-6 border border-[#30363d] bg-[#161b22] rounded-lg p-6 shadow-lg flex flex-col justify-between">
                 <div className="flex items-center justify-between border-b border-[#30363d] pb-3">
                   <span className="text-xs font-bold text-[#8b949e] uppercase">SURFACE_OBSERVATION</span>
@@ -195,7 +182,6 @@ export default function CampusWeatherStation() {
                 </div>
               </div>
 
-              {/* 전주대 캠퍼스 전용 메타데이터 카드 */}
               <div className="md:col-span-6 border border-[#30363d] bg-[#161b22] rounded-lg p-6 shadow-lg flex flex-col justify-between">
                 <div className="flex items-center justify-between border-b border-[#30363d] pb-3">
                   <span className="text-xs font-bold text-[#8b949e] uppercase">CAMPUS_TELEMETRY_LOG</span>
@@ -219,7 +205,7 @@ export default function CampusWeatherStation() {
                   </div>
                   <div className="flex justify-between border-b border-[#21262d] pb-1.5">
                     <span className="text-[#8b949e]">DATA_SOURCE:</span>
-                    <span className="text-[#58a6ff]">Open-Meteo High-Resolution Model</span>
+                    <span className="text-[#58a6ff]">{dataSource}</span>
                   </div>
                 </div>
 
@@ -229,7 +215,6 @@ export default function CampusWeatherStation() {
               </div>
             </div>
 
-            {/* 24시간 타임라인 예보 그래프/스트립 */}
             <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg">
               <div className="flex items-center justify-between border-b border-[#30363d] pb-3 mb-4">
                 <span className="text-xs font-bold text-white uppercase tracking-wider">
