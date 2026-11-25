@@ -42,15 +42,19 @@ interface BoxOfficeMovie {
   movieCd: string;
   title: string;
   openDt: string;
+  audiCnt: number;
   audiAcc: number;
+  showTm: string;
+  watchGrade: string;
+  genres: string;
+  nations: string;
 }
 
 const JEONJU_THEATERS = [
-  { name: 'CGV 전주고사', url: 'https://www.cgv.co.kr/theaters/?theaterCode=0213' },
-  { name: 'CGV 전주효자', url: 'https://www.cgv.co.kr/theaters/?theaterCode=0179' },
-  { name: '메가박스 전주객사', url: 'https://www.megabox.co.kr/theater?brchNo=5612' },
-  { name: '롯데시네마 전주', url: 'https://www.lottecinema.co.kr/NLCHS/Cinema/Detail?divisionCode=1&detailDivisionCode=5&cinemaID=6001' },
-  { name: '전주디지털독립영화관', url: 'https://cinephile.jeonjufest.kr/' },
+  { name: 'CGV 전주고사', url: 'https://cgv.co.kr/cnm/bzplcCgv/0213001' },
+  { name: 'CGV 서전주', url: 'https://cgv.co.kr/cnm/bzplcCgv/0225001' },
+  { name: '메가박스 전주객사', url: 'https://www.megabox.co.kr/theater/time?brchNo=0050' },
+  { name: '롯데시네마 백화점', url: 'https://www.lottecinema.co.kr/NLCHS/Cinema/Detail?divisionCode=1&detailDivisionCode=4&cinemaID=6002' },
 ];
 
 const DEFAULT_SCHEDULES: ScheduleItem[] = [
@@ -297,7 +301,7 @@ export default function EngineeringHub() {
     };
   }, []);
 
-  // KOBIS 일별 박스오피스 TOP 10 데이터 페칭
+  // KOBIS 일별 박스오피스 TOP 10 & 영화 상세 스펙 페칭
   useEffect(() => {
     const fetchBoxOffice = async () => {
       try {
@@ -746,6 +750,23 @@ export default function EngineeringHub() {
       return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     }
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  const formatAudienceCount = (count: number) => {
+    if (count >= 10000) {
+      const man = Math.floor(count / 10000);
+      const rest = Math.floor((count % 10000) / 1000);
+      return rest > 0 ? `${man}.${rest}만` : `${man}만`;
+    }
+    return `${count.toLocaleString()}명`;
+  };
+
+  const getGradeBadgeStyle = (grade: string) => {
+    if (grade === '전체') return 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40';
+    if (grade === '12세') return 'bg-sky-950/60 text-sky-300 border-sky-500/40';
+    if (grade === '15세') return 'bg-amber-950/60 text-amber-300 border-amber-500/40';
+    if (grade === '청불') return 'bg-rose-950/60 text-rose-300 border-rose-500/40';
+    return 'bg-[#21262d] text-[#8b949e] border-[#30363d]';
   };
 
   // 실제 현재 날짜 기준
@@ -1950,7 +1971,7 @@ export default function EngineeringHub() {
             />
           </div>
 
-          {/* 🎬 KOBIS 박스오피스 TOP 10 & 전주 극장 퀵 런처 */}
+          {/* 🎬 KOBIS 박스오피스 TOP 10 & 전주 극장 퀵 런처 (2배 확장형) */}
           <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg space-y-4">
             <div className="flex items-center justify-between border-b border-[#30363d] pb-2">
               <span className="text-xs font-bold text-[#d2a8ff] uppercase tracking-wider flex items-center gap-1.5">
@@ -1961,62 +1982,80 @@ export default function EngineeringHub() {
               </span>
             </div>
 
-            {/* 박스오피스 리스트 (스크롤형 TOP 10) */}
-            <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#0d1117] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#6e40c9] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#8957e5] [&::-webkit-scrollbar-thumb]:border [&::-webkit-scrollbar-thumb]:border-[#161b22]">
+            {/* 박스오피스 상세 카드 리스트 */}
+            <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#0d1117] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#6e40c9] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#8957e5] [&::-webkit-scrollbar-thumb]:border [&::-webkit-scrollbar-thumb]:border-[#161b22]">
               {movieLoading ? (
-                <div className="text-[11px] text-[#8b949e] py-6 text-center animate-pulse">
-                  SYNCING KOBIS BOX_OFFICE TELEMETRY...
+                <div className="text-[11px] text-[#8b949e] py-10 text-center animate-pulse">
+                  SYNCING KOBIS BOX_OFFICE & MOVIE METADATA...
                 </div>
               ) : movies.length === 0 ? (
-                <div className="text-[11px] text-[#f85149] py-4 text-center bg-[#0d1117] rounded border border-[#21262d]">
+                <div className="text-[11px] text-[#f85149] py-6 text-center bg-[#0d1117] rounded border border-[#21262d]">
                   ⚠️ 박스오피스 데이터를 불러오지 못했습니다. (API KEY 확인 필요)
                 </div>
               ) : (
                 movies.map((m) => (
                   <div
                     key={m.movieCd}
-                    className="flex items-center justify-between p-2 rounded bg-[#0d1117] border border-[#21262d] hover:border-[#30363d] transition text-xs gap-2"
+                    className="p-2.5 rounded bg-[#0d1117] border border-[#21262d] hover:border-[#30363d] transition space-y-1.5"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className={`w-5 text-center font-extrabold shrink-0 ${
-                          m.rank <= 3 ? 'text-[#e3b341]' : 'text-[#8b949e]'
-                        }`}
-                      >
-                        {m.rank}
-                      </span>
-
-                      {m.isNew ? (
-                        <span className="text-[9px] px-1 py-0.2 rounded bg-rose-950/70 text-rose-400 border border-rose-500/40 font-bold shrink-0">
-                          NEW
+                    {/* 1줄 차: 순위 + 등락 + 제목 + 전일/누적 관객수 */}
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className={`w-5 text-center font-extrabold shrink-0 ${
+                            m.rank <= 3 ? 'text-[#e3b341]' : 'text-[#8b949e]'
+                          }`}
+                        >
+                          {m.rank}
                         </span>
-                      ) : m.rankInten > 0 ? (
-                        <span className="text-[10px] text-[#7ee787] font-bold shrink-0">▲{m.rankInten}</span>
-                      ) : m.rankInten < 0 ? (
-                        <span className="text-[10px] text-[#f85149] font-bold shrink-0">▼{Math.abs(m.rankInten)}</span>
-                      ) : (
-                        <span className="text-[10px] text-[#8b949e] shrink-0">-</span>
-                      )}
 
-                      <span className="text-slate-200 truncate font-sans" title={m.title}>
-                        {m.title}
-                      </span>
+                        {m.isNew ? (
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-rose-950/70 text-rose-400 border border-rose-500/40 font-bold shrink-0">
+                            NEW
+                          </span>
+                        ) : m.rankInten > 0 ? (
+                          <span className="text-[10px] text-[#7ee787] font-bold shrink-0">▲{m.rankInten}</span>
+                        ) : m.rankInten < 0 ? (
+                          <span className="text-[10px] text-[#f85149] font-bold shrink-0">▼{Math.abs(m.rankInten)}</span>
+                        ) : (
+                          <span className="text-[10px] text-[#8b949e] shrink-0">-</span>
+                        )}
+
+                        <span className="text-slate-100 font-bold truncate font-sans" title={m.title}>
+                          {m.title}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0 font-mono text-[10px]">
+                        <span className="text-[#7ee787] font-bold">일 {formatAudienceCount(m.audiCnt)}</span>
+                        <span className="text-[#8b949e]">(누적 {formatAudienceCount(m.audiAcc)})</span>
+                      </div>
                     </div>
 
-                    <span className="text-[10px] text-[#8b949e] shrink-0 font-mono">
-                      {Math.round(m.audiAcc / 10000).toLocaleString()}만명
-                    </span>
+                    {/* 2줄 차: 관람등급 + 개봉일 + 상영시간 + 장르 + 제작국가 */}
+                    <div className="flex flex-wrap items-center gap-1.5 pl-7 text-[10px] text-[#8b949e]">
+                      <span className={`px-1.5 py-0.2 rounded border font-bold ${getGradeBadgeStyle(m.watchGrade)}`}>
+                        {m.watchGrade}
+                      </span>
+                      <span>{m.openDt} 개봉</span>
+                      <span>·</span>
+                      <span className="text-[#c9d1d9]">{m.showTm}</span>
+                      <span>·</span>
+                      <span className="text-[#58a6ff]">{m.genres}</span>
+                      <span>·</span>
+                      <span>{m.nations}</span>
+                    </div>
                   </div>
                 ))
               )}
             </div>
 
-            {/* 전주 극장 퀵 런처 */}
+            {/* 전주 4대 극장 퀵 런처 */}
             <div className="border-t border-[#21262d] pt-3">
               <div className="text-[10px] font-bold text-[#8b949e] uppercase mb-2">
                 JEONJU_THEATER_QUICK_LINKS
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
                 {JEONJU_THEATERS.map((theater) => (
                   <a
                     key={theater.name}
@@ -2024,9 +2063,10 @@ export default function EngineeringHub() {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={playClickSound}
-                    className="text-[11px] px-2.5 py-1 rounded bg-[#0d1117] border border-[#30363d] text-[#58a6ff] hover:border-[#58a6ff] hover:bg-[#1f6feb]/20 transition font-sans"
+                    className="text-[11px] px-2.5 py-1.5 rounded bg-[#0d1117] border border-[#30363d] text-[#58a6ff] hover:border-[#58a6ff] hover:bg-[#1f6feb]/20 transition font-sans flex items-center justify-between"
                   >
-                    {theater.name} ↗
+                    <span className="truncate">{theater.name}</span>
+                    <span className="shrink-0">↗</span>
                   </a>
                 ))}
               </div>
