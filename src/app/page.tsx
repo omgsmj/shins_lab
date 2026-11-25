@@ -202,7 +202,7 @@ export default function EngineeringHub() {
     return () => clearInterval(interval);
   }, [isStopwatchRunning]);
 
-useEffect(() => {
+  useEffect(() => {
     let alertTimer: NodeJS.Timeout;
 
     const fetchJeonjuWeather = async () => {
@@ -828,9 +828,52 @@ useEffect(() => {
 
       {/* 1. 최상단 엔지니어링 헤더 & 텔레메트리 바 */}
       <header className="border border-[#30363d] bg-[#161b22] p-4 rounded-lg mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
-        <div className="flex items-center gap-3">
-          <div className="h-3 w-3 rounded-full bg-[#238636] animate-pulse" />
-          <span className="text-sm font-bold text-white tracking-widest uppercase">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* 입체 S자 리본 심볼 + Shins-LAB 브랜드 */}
+          <div className="flex items-center gap-2 pr-2 border-r border-[#30363d]">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 40 40"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              className="shrink-0 drop-shadow-[0_0_8px_rgba(139,92,246,0.45)]"
+              aria-label="Shins-LAB Logo"
+            >
+              <defs>
+                <linearGradient id="header-shins-grad-top" x1="8" y1="4" x2="32" y2="22" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#A78BFA" />
+                  <stop offset="100%" stopColor="#6366F1" />
+                </linearGradient>
+                <linearGradient id="header-shins-grad-bottom" x1="8" y1="18" x2="32" y2="36" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#818CF8" />
+                  <stop offset="100%" stopColor="#4338CA" />
+                </linearGradient>
+                <linearGradient id="header-shins-grad-core" x1="12" y1="14" x2="28" y2="26" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#C4B5FD" />
+                  <stop offset="100%" stopColor="#312E81" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M27.5 6C19.5 6 13 10.2 13 15.8C13 19.6 16.4 21.8 21.5 23.1C17.8 21.2 17.5 17.8 20.5 15.2C23.5 12.6 28.5 12.2 31 13.5C31 9.1 29.8 6 27.5 6Z"
+                fill="url(#header-shins-grad-top)"
+              />
+              <path
+                d="M13.2 16.5C13.6 21.4 18.8 23.2 23.6 24.6C26.4 25.4 27.2 27.6 26.2 29.5C28.8 27.4 29.2 23.2 25.4 20.8C21.2 18.2 15.2 17.8 13.2 16.5Z"
+                fill="url(#header-shins-grad-core)"
+                opacity="0.9"
+              />
+              <path
+                d="M12.5 34C20.5 34 27 29.8 27 24.2C27 20.4 23.6 18.2 18.5 16.9C22.2 18.8 22.5 22.2 19.5 24.8C16.5 27.4 11.5 27.8 9 26.5C9 30.9 10.2 34 12.5 34Z"
+                fill="url(#header-shins-grad-bottom)"
+              />
+            </svg>
+            <span className="text-sm font-extrabold tracking-wider text-white">
+              Shins-LAB
+            </span>
+          </div>
+
+          <span className="text-sm font-bold text-[#c9d1d9] tracking-widest uppercase">
             STATION_TERMINAL :: {profile.name.split(' ')[0]}
           </span>
           <button
