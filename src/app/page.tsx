@@ -35,6 +35,24 @@ interface DevTask {
   is_completed: boolean;
 }
 
+interface BoxOfficeMovie {
+  rank: number;
+  rankInten: number;
+  isNew: boolean;
+  movieCd: string;
+  title: string;
+  openDt: string;
+  audiAcc: number;
+}
+
+const JEONJU_THEATERS = [
+  { name: 'CGV 전주고사', url: 'https://www.cgv.co.kr/theaters/?theaterCode=0213' },
+  { name: 'CGV 전주효자', url: 'https://www.cgv.co.kr/theaters/?theaterCode=0179' },
+  { name: '메가박스 전주객사', url: 'https://www.megabox.co.kr/theater?brchNo=5612' },
+  { name: '롯데시네마 전주', url: 'https://www.lottecinema.co.kr/NLCHS/Cinema/Detail?divisionCode=1&detailDivisionCode=5&cinemaID=6001' },
+  { name: '전주디지털독립영화관', url: 'https://cinephile.jeonjufest.kr/' },
+];
+
 const DEFAULT_SCHEDULES: ScheduleItem[] = [
   { id: 1, date: '2026-10-26', title: '정보처리기사 CBT 엔진 빌드', category: 'DEV', isDday: false },
   { id: 2, date: '2026-10-28', title: 'AI 파이프라인 통합 테스트', category: 'ACADEMIC', isDday: true },
@@ -123,6 +141,11 @@ export default function EngineeringHub() {
   const [scratchpad, setScratchpad] = useState<string>(
     '// QUICK SCRATCHPAD (Auto-saved)\n$ python -m venv venv\n$ pip install -r requirements.txt'
   );
+
+  // 12. KOBIS 박스오피스 TOP 10 상태
+  const [movies, setMovies] = useState<BoxOfficeMovie[]>([]);
+  const [movieTargetDt, setMovieTargetDt] = useState<string>('');
+  const [movieLoading, setMovieLoading] = useState<boolean>(true);
 
   // 브라우저 마운트 시 단 1회 현재 실제 KST 날짜 확정 주입
   useEffect(() => {
@@ -272,6 +295,26 @@ export default function EngineeringHub() {
     return () => {
       if (alertTimer) clearTimeout(alertTimer);
     };
+  }, []);
+
+  // KOBIS 일별 박스오피스 TOP 10 데이터 페칭
+  useEffect(() => {
+    const fetchBoxOffice = async () => {
+      try {
+        const res = await fetch('/api/movies');
+        const data = await res.json();
+        if (res.ok && Array.isArray(data?.movies)) {
+          setMovies(data.movies);
+          setMovieTargetDt(data.targetDt || '');
+        }
+      } catch (err) {
+        console.warn('KOBIS API 연결 실패:', err);
+      } finally {
+        setMovieLoading(false);
+      }
+    };
+
+    fetchBoxOffice();
   }, []);
 
   useEffect(() => {
@@ -1905,6 +1948,89 @@ export default function EngineeringHub() {
               }}
               className="w-full bg-[#0d1117] border border-[#21262d] rounded p-2.5 text-xs text-[#7ee787] font-mono leading-relaxed focus:outline-none focus:border-[#30363d]"
             />
+          </div>
+
+          {/* 🎬 KOBIS 박스오피스 TOP 10 & 전주 극장 퀵 런처 */}
+          <div className="border border-[#30363d] bg-[#161b22] rounded-lg p-5 shadow-lg space-y-4">
+            <div className="flex items-center justify-between border-b border-[#30363d] pb-2">
+              <span className="text-xs font-bold text-[#d2a8ff] uppercase tracking-wider flex items-center gap-1.5">
+                <span>🎬 CINEMA_RADAR :: BOX_OFFICE TOP 10</span>
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-purple-950/60 text-purple-300 border border-purple-500/40 font-bold">
+                {movieTargetDt ? `KOBIS ${movieTargetDt}` : 'KOBIS LIVE'}
+              </span>
+            </div>
+
+            {/* 박스오피스 리스트 (스크롤형 TOP 10) */}
+            <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1.5 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#0d1117] [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#6e40c9] [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-[#8957e5] [&::-webkit-scrollbar-thumb]:border [&::-webkit-scrollbar-thumb]:border-[#161b22]">
+              {movieLoading ? (
+                <div className="text-[11px] text-[#8b949e] py-6 text-center animate-pulse">
+                  SYNCING KOBIS BOX_OFFICE TELEMETRY...
+                </div>
+              ) : movies.length === 0 ? (
+                <div className="text-[11px] text-[#f85149] py-4 text-center bg-[#0d1117] rounded border border-[#21262d]">
+                  ⚠️ 박스오피스 데이터를 불러오지 못했습니다. (API KEY 확인 필요)
+                </div>
+              ) : (
+                movies.map((m) => (
+                  <div
+                    key={m.movieCd}
+                    className="flex items-center justify-between p-2 rounded bg-[#0d1117] border border-[#21262d] hover:border-[#30363d] transition text-xs gap-2"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className={`w-5 text-center font-extrabold shrink-0 ${
+                          m.rank <= 3 ? 'text-[#e3b341]' : 'text-[#8b949e]'
+                        }`}
+                      >
+                        {m.rank}
+                      </span>
+
+                      {m.isNew ? (
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-rose-950/70 text-rose-400 border border-rose-500/40 font-bold shrink-0">
+                          NEW
+                        </span>
+                      ) : m.rankInten > 0 ? (
+                        <span className="text-[10px] text-[#7ee787] font-bold shrink-0">▲{m.rankInten}</span>
+                      ) : m.rankInten < 0 ? (
+                        <span className="text-[10px] text-[#f85149] font-bold shrink-0">▼{Math.abs(m.rankInten)}</span>
+                      ) : (
+                        <span className="text-[10px] text-[#8b949e] shrink-0">-</span>
+                      )}
+
+                      <span className="text-slate-200 truncate font-sans" title={m.title}>
+                        {m.title}
+                      </span>
+                    </div>
+
+                    <span className="text-[10px] text-[#8b949e] shrink-0 font-mono">
+                      {Math.round(m.audiAcc / 10000).toLocaleString()}만명
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* 전주 극장 퀵 런처 */}
+            <div className="border-t border-[#21262d] pt-3">
+              <div className="text-[10px] font-bold text-[#8b949e] uppercase mb-2">
+                JEONJU_THEATER_QUICK_LINKS
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {JEONJU_THEATERS.map((theater) => (
+                  <a
+                    key={theater.name}
+                    href={theater.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={playClickSound}
+                    className="text-[11px] px-2.5 py-1 rounded bg-[#0d1117] border border-[#30363d] text-[#58a6ff] hover:border-[#58a6ff] hover:bg-[#1f6feb]/20 transition font-sans"
+                  >
+                    {theater.name} ↗
+                  </a>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
       </div>
